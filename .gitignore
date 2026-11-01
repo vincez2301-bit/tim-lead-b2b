@@ -1,0 +1,27 @@
+# Bí mật — không bao giờ commit
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+!web/.env.example
+supabase/.env
+supabase/functions/.env
+
+# Phụ thuộc và build
+node_modules/
+web/dist/
+.vite/
+coverage/
+
+# Supabase CLI
+supabase/.branches
+supabase/.temp
+
+# Hệ điều hành / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

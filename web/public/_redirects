@@ -1,0 +1,2 @@
+# SPA fallback: mọi đường dẫn trả về index.html (Netlify / Cloudflare Pages).
+/*    /index.html   200

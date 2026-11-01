@@ -1,0 +1,24 @@
+{
+  "tasks": {
+    "check": "deno check supabase/functions/*/index.ts",
+    "test": "deno test --allow-env --allow-read supabase/functions/_tests/",
+    "lint": "deno lint supabase/functions/"
+  },
+  "fmt": {
+    "lineWidth": 120,
+    "include": [
+      "supabase/functions/"
+    ]
+  },
+  "lint": {
+    "include": [
+      "supabase/functions/"
+    ],
+    "rules": {
+      "exclude": [
+        "no-import-prefix"
+      ]
+    }
+  },
+  "nodeModulesDir": "none"
+}

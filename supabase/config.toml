@@ -1,0 +1,76 @@
+# Cấu hình Supabase CLI cho môi trường local (`supabase start`).
+# Project trên cloud được cấu hình qua Dashboard; các giá trị auth dưới đây phải
+# được đặt GIỐNG HỆT trên Dashboard (Authentication → Sign In / Providers).
+project_id = "sync-lead-finder"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+jwt_expiry = 3600
+# Mục 10.2: tắt đăng ký công khai — chỉ tạo người dùng bằng lời mời.
+enable_signup = false
+enable_anonymous_sign_ins = false
+minimum_password_length = 12
+password_requirements = "lower_upper_letters_digits"
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = true
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+
+# Mục 8.1: mọi function đều yêu cầu JWT hợp lệ; vai trò được kiểm tra thêm trong code.
+[functions.estimate]
+verify_jwt = true
+
+[functions.discover]
+verify_jwt = true
+
+[functions.profile]
+verify_jwt = true
+
+[functions.enrich_youtube]
+verify_jwt = true
+
+[functions.enrich_contact]
+verify_jwt = true
+
+[functions.score]
+verify_jwt = true
+
+[functions.cohort_query]
+verify_jwt = true
+
+[functions.export]
+verify_jwt = true
