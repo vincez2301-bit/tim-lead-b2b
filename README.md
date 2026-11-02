@@ -28,6 +28,11 @@ Mỗi phát hiện là một dòng trong bảng `observations`, kèm `evidence_u
 
 ## Triển khai lên một project Supabase
 
+Có hai cách đưa schema và Edge Functions lên Supabase:
+
+- **Cách A — GitHub integration (khuyến nghị, dùng được ở mọi gói kể cả Free).** Trong Dashboard của project, vào Project Settings → Integrations → GitHub Integration → **Authorize GitHub**. Chọn repo này, đặt Working directory là `.`, bật **Deploy to production** với nhánh `main`, rồi bấm Enable integration. Từ đó mỗi lần push hoặc merge vào `main`, Supabase tự chạy migration mới và deploy mọi function khai báo trong `config.toml`. Auth config và `seed.sql` KHÔNG được áp lên production. Sau đó làm tiếp từ bước 3 bên dưới; bước 3 có thể làm trên Dashboard tại Edge Functions → Secrets.
+- **Cách B — Supabase CLI**, theo các bước 1–4 bên dưới.
+
 Cần [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) (hoặc dùng `npx supabase`). Lấy **project ref** trong Dashboard → Project Settings → General.
 
 1. Đăng nhập và liên kết project:
