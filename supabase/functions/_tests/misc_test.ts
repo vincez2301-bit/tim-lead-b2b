@@ -8,6 +8,7 @@ import { parseCohortFilter } from "../_shared/cohort.ts";
 import { makeDnc } from "../_shared/dnc.ts";
 import { HttpError } from "../_shared/http.ts";
 import type { Region } from "../_shared/settings.ts";
+import { pickServerKey } from "../_shared/db.ts";
 
 const UA = "SyncLeadFinderBot/1.0 (+https://example.com/bot)";
 
@@ -129,4 +130,14 @@ Deno.test("DNC: domain cha và email theo domain", () => {
   assert(d.isEmail("Boss@Beta.vn"));
   assert(d.isEmail("a@gamma.vn"));
   assert(!d.isEmail("a@beta.vn"));
+});
+
+Deno.test("pickServerKey: ưu tiên service_role, rồi SUPABASE_SECRET_KEYS", () => {
+  const env = (vars: Record<string, string>) => (n: string) => vars[n];
+  assertEquals(pickServerKey(env({ SUPABASE_SERVICE_ROLE_KEY: "eyJlegacy", SUPABASE_SECRET_KEYS: '{"default":"sb_secret_x"}' })), "eyJlegacy");
+  assertEquals(pickServerKey(env({ SUPABASE_SECRET_KEYS: '{"default":"sb_secret_x","other":"sb_secret_y"}' })), "sb_secret_x");
+  assertEquals(pickServerKey(env({ SUPABASE_SECRET_KEYS: '{"backend":"sb_secret_y"}' })), "sb_secret_y");
+  assertEquals(pickServerKey(env({ SUPABASE_SECRET_KEYS: "sb_secret_raw" })), "sb_secret_raw");
+  assertEquals(pickServerKey(env({ SUPABASE_SECRET_KEYS: "not-json" })), null);
+  assertEquals(pickServerKey(env({})), null);
 });

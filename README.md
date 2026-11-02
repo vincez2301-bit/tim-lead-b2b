@@ -69,7 +69,7 @@ Cần [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/gett
    - bật MFA (TOTP);
    - đặt Site URL bằng URL của frontend.
 
-6. Mời người dùng: Authentication → Users → **Invite user**. Trigger sẽ tự tạo `profiles` với vai trò `user`. Nâng admin đầu tiên bằng SQL Editor:
+6. Tạo người dùng: Authentication → Users → **Add user → Create new user**, nhập email và mật khẩu, tích **Auto Confirm User**. Trigger sẽ tự tạo `profiles` với vai trò `user`. (Không nên dùng **Invite user**: app chưa có màn hình đặt mật khẩu cho link mời, và email mặc định của Supabase chỉ gửi được cho thành viên của organization, giới hạn vài email mỗi giờ.) Nâng admin đầu tiên bằng SQL Editor:
 
    ```sql
    update public.profiles set role = 'admin' where email = 'ban@congty.com';
@@ -79,7 +79,9 @@ Cần [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/gett
 
 7. Đăng nhập app bằng tài khoản admin, vào **Tín hiệu** và **xác nhận** các tín hiệu muốn thu thập. Mọi tín hiệu khởi đầu ở trạng thái `proposed`, và pipeline không ghi observation cho tín hiệu chưa xác nhận.
 
-8. Frontend: xem [web/README.md](web/README.md). Chỉ cần `VITE_SUPABASE_URL` và `VITE_SUPABASE_ANON_KEY`.
+8. Frontend: xem [web/README.md](web/README.md). Chỉ cần `VITE_SUPABASE_URL` và `VITE_SUPABASE_ANON_KEY`. Lấy cả hai ở Project Settings → API Keys: dùng **Publishable key** (`sb_publishable_...`) hoặc khoá legacy `anon`.
+
+Edge Functions tự nhận `SUPABASE_URL` và khoá server từ Supabase. Code ưu tiên `SUPABASE_SERVICE_ROLE_KEY` (legacy), và tự chuyển sang `SUPABASE_SECRET_KEYS` nếu project đã tắt khoá legacy, nên không cần đặt thủ công.
 
 Sau mỗi thay đổi schema, chạy **Security Advisor** và **Performance Advisor** của Supabase (Dashboard → Advisors).
 

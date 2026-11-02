@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import { isBlockedIp, parseIPv6 } from "../_shared/ip.ts";
 import { assertPublicHost, safeFetch, SafeFetchError, TEXT_TYPES } from "../_shared/safeFetch.ts";
 
