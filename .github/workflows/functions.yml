@@ -1,0 +1,29 @@
+name: Edge Functions
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/functions/**", "deno.json", "deno.lock", ".github/workflows/functions.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["supabase/functions/**", "deno.json", "deno.lock", ".github/workflows/functions.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  functions:
+    name: lint, type-check, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno lint && deno check supabase/functions/*/index.ts && deno task test

@@ -1,0 +1,40 @@
+name: Database
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/migrations/**", "tests/sql/**", "scripts/test-db.sh", ".github/workflows/database.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["supabase/migrations/**", "tests/sql/**", "scripts/test-db.sh", ".github/workflows/database.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database:
+    name: migrations + RLS tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/test-db.sh

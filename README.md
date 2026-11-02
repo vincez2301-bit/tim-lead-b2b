@@ -23,7 +23,7 @@ Mỗi phát hiện là một dòng trong bảng `observations`, kèm `evidence_u
 ├─ web/                        # React + Vite + TypeScript (xem web/README.md)
 ├─ tests/sql/                  # test SQL: RLS, trigger, chấm điểm, cohort, hạn mức
 ├─ scripts/test-db.sh          # chạy migration + test SQL trên Postgres thường
-└─ .github/workflows/ci.yml    # lint, type-check, test Deno, test SQL, build web
+└─ .github/workflows/          # CI tách theo phần (functions, database, web), chỉ chạy khi phần đó đổi
 ```
 
 ## Triển khai lên một project Supabase
