@@ -18,3 +18,10 @@ GitHub tính phút theo từng job và làm tròn lên phút. Cấu hình hiện
 - Chỉ chạy khi push lên `main` hoặc PR vào `main`; push lên nhánh khác không chạy. Có thể chạy tay ở tab Actions (Run workflow).
 - Lượt chạy cũ trên cùng nhánh bị huỷ khi có lượt mới; mỗi job tối đa 10 phút.
 - Chạy test trên máy trước khi push (lệnh trong `CLAUDE.md`), không dùng CI để thử.
+
+## Áp dụng từ microsoft/TokenEconomizer
+
+- **Cắt bớt công cụ không dùng:** `.claude/settings.json` chặn các MCP không liên quan dự án (Canva, Epidemic Sound, Claude Docs, Gmail, Calendar, Drive), để Claude không nạp và gọi chúng. Cần lại thì xoá dòng tương ứng.
+- **Ghi lại sự thật của repo:** lệnh test, cách cài deno, giới hạn mạng... nằm trong `CLAUDE.md` để phiên sau khỏi dò lại.
+- **Chống lặp:** một cách làm thất bại 2 lần thì dừng, đổi hướng hoặc hỏi.
+- Bản thân plugin TokenEconomizer học từ lịch sử phiên lưu trên máy. Phiên cloud mỗi lần là container mới nên plugin gần như không có gì để học; chỉ nên cài khi chạy Claude Code trên máy riêng.
