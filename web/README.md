@@ -42,8 +42,9 @@ VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=... npm run build
 Tải thư mục `dist/` lên bất kỳ hosting tĩnh nào (Netlify, Cloudflare Pages, Vercel, S3 + CloudFront...).
 
 - **SPA fallback**: mọi đường dẫn phải trả về `index.html`. `public/_redirects` đã cấu hình cho
-  Netlify / Cloudflare Pages; hosting khác cần cấu hình tương đương.
-- **Header bảo mật**: `public/_headers` (Netlify / Cloudflare Pages) đặt CSP, `X-Frame-Options`,
+  Netlify / Cloudflare Pages; Vercel dùng `vercel.json` (cùng fallback + header). Hosting khác cần cấu hình tương đương.
+- **Vercel**: Import repo → Root Directory = `web` (Vite tự nhận), thêm 2 biến `VITE_SUPABASE_*` cho Production.
+- **Header bảo mật**: `public/_headers` (Netlify / Cloudflare Pages), `vercel.json` (Vercel) đặt CSP, `X-Frame-Options`,
   `X-Content-Type-Options`, `Referrer-Policy`. Nên thay `https://*.supabase.co` bằng URL project cụ thể.
 - Bản build tự chèn thẻ `<meta http-equiv="Content-Security-Policy">` với `connect-src` = URL Supabase
   lúc build; không có script/style inline.
