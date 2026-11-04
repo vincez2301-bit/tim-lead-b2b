@@ -50,11 +50,21 @@ function assertPublicKey(key: string) {
   }
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, ".", "");
   const url = pick(env, ["VITE_SUPABASE_URL", "SUPABASE_URL"]);
   const key = pick(env, ["VITE_SUPABASE_ANON_KEY", "VITE_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY"]);
   assertPublicKey(key);
+  if (command === "build") {
+    // Chỉ in tên biến tìm thấy, không in giá trị.
+    console.log(`[slf] Supabase URL: ${url ? "có" : "THIẾU"}, publishable key: ${key ? "có" : "THIẾU"}`);
+    if (env.VERCEL && (!url || !key)) {
+      throw new Error(
+        "Thiếu SUPABASE_URL hoặc SUPABASE_PUBLISHABLE_KEY lúc build trên Vercel. " +
+          "Kiểm tra Settings → Environment Variables (môi trường Production, loại Config) rồi Redeploy.",
+      );
+    }
+  }
   return {
     define: {
       "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(url),
