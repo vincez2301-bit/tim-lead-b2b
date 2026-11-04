@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   classifyUrl, decodeCfEmail, detectPageSignals, extractEmails, extractPhones, extractSite, formatVnPhone, htmlToText,
-  makePage, normalizeVnPhone, normalizeYoutubeChannelUrl,
+  makePage, MAX_PAGE_HTML_CHARS, normalizeVnPhone, normalizeYoutubeChannelUrl, slimHtml,
 } from "../_shared/extract.ts";
 
 const page = (html: string, url = "https://congty.vn/", kind: Parameters<typeof makePage>[1] = "home") => makePage(url, kind, html);
@@ -112,4 +112,17 @@ Deno.test("classifyUrl", () => {
   assertEquals(classifyUrl("https://a.vn/du-an"), "portfolio");
   assertEquals(classifyUrl("https://a.vn/p?id=3", "Liên hệ"), "contact");
   assertEquals(classifyUrl("https://a.vn/"), "home");
+});
+
+Deno.test("slimHtml: bỏ script/style nặng, giữ mailto/iframe/dấu hiệu pixel, cắt độ dài", () => {
+  const big = "x".repeat(3_000_000);
+  const html = `<html lang="vi"><style>${big}</style><script>var a="${big}";fbq('init','123');</script>` +
+    `<script async src="https://www.googletagmanager.com/gtag/js?id=AW-1234567"></script>` +
+    `<a href="mailto:info@congty.vn">Mail</a><iframe src="https://www.youtube.com/embed/abc"></iframe></html>`;
+  const slim = slimHtml(html);
+  assert(slim.length < 2_000);
+  assert(slim.includes("mailto:info@congty.vn") && slim.includes("youtube.com/embed/abc"));
+  const codes = detectPageSignals(makePage("https://congty.vn/", "home", html)).map((f) => f.code);
+  assert(codes.includes("RUNNING_META_ADS") && codes.includes("RUNNING_GOOGLE_ADS"));
+  assertEquals(slimHtml("<p>" + "y".repeat(MAX_PAGE_HTML_CHARS + 10) + "</p>").length, MAX_PAGE_HTML_CHARS);
 });

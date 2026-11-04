@@ -72,6 +72,12 @@ export function PipelineRunner({
         () => cancelled.current,
       );
       const summary = summarize(fn, res.responses);
+      if (res.failedIds.length) {
+        setNotes((n) => [
+          ...n,
+          `${STEP_LABEL[fn]}: bỏ qua ${res.failedIds.length} công ty vì server quá tải khi xử lý (website quá nặng hoặc phản hồi chậm). Có thể chạy lại riêng các công ty này ở trang Công ty.`,
+        ]);
+      }
       if (res.error) {
         update(fn, { state: "error", summary });
         setError(`${STEP_LABEL[fn]}: ${res.error}`);

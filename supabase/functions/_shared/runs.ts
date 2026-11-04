@@ -5,7 +5,9 @@ import type { AuthContext } from "./auth.ts";
 
 export type Step = "discover" | "profile" | "enrich_youtube" | "enrich_contact" | "score" | "export";
 
-const STALE_MINUTES = 15; // run "running" lâu hơn thế coi như đã chết (function bị timeout)
+// run "running" lâu hơn thế coi như đã chết (function bị timeout hoặc vượt CPU/bộ nhớ, mã 546).
+// Mỗi lượt tự dừng sau ~110s (crawl.time_budget_ms), nên 3 phút là đủ an toàn.
+const STALE_MINUTES = 3;
 
 /** Giới hạn số run đồng thời mỗi người dùng (mục 10.4). */
 export async function assertConcurrency(ctx: AuthContext, max: number): Promise<void> {

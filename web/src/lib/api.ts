@@ -38,6 +38,7 @@ function friendly(status: number, code: string | undefined, serverMsg: string): 
   if (status === 429) return `Vượt giới hạn (429)${detail}.`;
   if (status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
   if (status === 403) return `Bạn không có quyền thực hiện thao tác này${detail}.`;
+  if (status === 546) return `Edge Function vượt giới hạn CPU/bộ nhớ (546)${detail}.`;
   if (status >= 500) return `Lỗi server (${status})${detail}.`;
   return serverMsg || `Lỗi ${status}`;
 }
@@ -146,6 +147,8 @@ export interface BatchResult<R> {
   stoppedReason: "quota" | "cancelled" | "stalled" | null;
   error: string | null;
   runIds: string[];
+  /** Công ty bị bỏ qua vì function lỗi tài nguyên/timeout ngay cả khi chạy riêng từng công ty. */
+  failedIds: string[];
 }
 
 interface BatchLike {
@@ -159,39 +162,65 @@ interface BatchLike {
  * Gửi company_ids theo lô (kích thước batchSize), gửi lại remaining_ids cho tới khi hết.
  * Dừng khi có lỗi, khi hết quota YouTube, khi bị huỷ, hoặc khi 3 lần liên tiếp không tiến triển.
  */
+// Lỗi do tài nguyên/timeout của Edge Function (546 = vượt CPU/bộ nhớ) hoặc mạng: thử lại với lô nhỏ hơn.
+const RETRYABLE = new Set([0, 502, 503, 504, 546]);
+const BUSY_WAIT_MS = 30_000; // run chết vẫn tính "đang chạy" tối đa 3 phút (runs.ts STALE_MINUTES)
+const BUSY_MAX_WAITS = 7;
+
 export async function runBatched<R extends BatchLike>(
   fn: BatchFn,
   ids: string[],
   batchSize: number,
   onProgress?: (p: BatchProgress) => void,
   isCancelled?: () => boolean,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<BatchResult<R>> {
-  const size = Math.max(1, Math.floor(batchSize) || 5);
+  let size = Math.max(1, Math.floor(batchSize) || 5);
   let queue = [...new Set(ids)];
   const total = queue.length;
   const responses: R[] = [];
   const runIds: string[] = [];
+  const failedIds: string[] = [];
   let done = 0;
   let calls = 0;
   let stalls = 0;
+  let singleFails = 0;
+  let busyWaits = 0;
+  const result = (stoppedReason: BatchResult<R>["stoppedReason"], error: string | null): BatchResult<R> => ({
+    responses, done, total, stoppedReason, error, runIds, failedIds,
+  });
   onProgress?.({ done, total, calls });
 
   while (queue.length > 0) {
-    if (isCancelled?.()) return { responses, done, total, stoppedReason: "cancelled", error: null, runIds };
+    if (isCancelled?.()) return result("cancelled", null);
     const chunk = queue.slice(0, size);
     let res: R;
     try {
       res = await callFn<R>(fn, { company_ids: chunk });
     } catch (e) {
-      return {
-        responses,
-        done,
-        total,
-        stoppedReason: null,
-        error: e instanceof Error ? e.message : String(e),
-        runIds,
-      };
+      const status = e instanceof ApiError ? e.status : 0;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (status === 429 && e instanceof ApiError && e.code === "too_many_runs" && busyWaits < BUSY_MAX_WAITS) {
+        busyWaits++;
+        await sleep(BUSY_WAIT_MS);
+        continue;
+      }
+      if (!RETRYABLE.has(status)) return result(null, msg);
+      if (chunk.length > 1) {
+        size = 1; // chạy lại từng công ty để tìm ra công ty gây lỗi
+        continue;
+      }
+      // Một công ty vẫn lỗi: bỏ qua và chạy tiếp; dừng nếu lỗi liên tiếp (server có vấn đề chung).
+      singleFails++;
+      if (singleFails >= 3) return result(null, msg);
+      failedIds.push(chunk[0]);
+      queue = queue.slice(1);
+      done++;
+      onProgress?.({ done, total, calls });
+      continue;
     }
+    singleFails = 0;
+    busyWaits = 0;
     calls++;
     responses.push(res);
     if (res.run_id) runIds.push(res.run_id);
@@ -202,15 +231,13 @@ export async function runBatched<R extends BatchLike>(
     queue = [...remaining, ...queue.slice(chunk.length)];
     onProgress?.({ done, total, calls });
 
-    if (res.stopped_reason === "quota") {
-      return { responses, done, total, stoppedReason: "quota", error: null, runIds };
-    }
+    if (res.stopped_reason === "quota") return result("quota", null);
     if (progressed === 0) {
       stalls++;
-      if (stalls >= 3) return { responses, done, total, stoppedReason: "stalled", error: null, runIds };
+      if (stalls >= 3) return result("stalled", null);
     } else stalls = 0;
   }
-  return { responses, done, total, stoppedReason: null, error: null, runIds };
+  return result(null, null);
 }
 
 /** Cộng dồn một trường số qua nhiều phản hồi. */

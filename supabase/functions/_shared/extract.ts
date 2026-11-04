@@ -108,7 +108,29 @@ export function extractIframeSrcs(html: string, baseUrl: string): string[] {
   return out;
 }
 
-export function makePage(url: string, kind: PageKind, html: string): PageData {
+/** Giới hạn HTML giữ lại cho mỗi trang sau khi bỏ script/style (giữ CPU/bộ nhớ trong hạn mức Edge Function). */
+export const MAX_PAGE_HTML_CHARS = 200_000;
+
+/**
+ * Bỏ comment, script, style, svg, noscript, template (không chứa thông tin cần trích) rồi cắt độ dài.
+ * Giữ iframe (nhúng YouTube) và thuộc tính thẻ (mailto, tel, data-cfemail).
+ */
+// Dấu hiệu pixel quảng cáo nằm trong <script>: giữ lại dưới dạng comment ngắn để detectPageSignals vẫn thấy.
+const AD_HINTS = /fbq\(\s*['"]init|fbq\(|connect\.facebook\.net\/[^"']*fbevents\.js|['"\s=]AW-\d{6,}|googleadservices\.com\/pagead\/conversion|googletagmanager\.com\/gtag\/js/gi;
+
+export function slimHtml(html: string): string {
+  const s = html
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|noscript|svg|template)\b[\s\S]*?<\/\1\s*>/gi, (block, tag: string) => {
+      if (tag.toLowerCase() !== "script") return " ";
+      const hits = block.match(AD_HINTS);
+      return hits ? ` <!--ads ${hits.slice(0, 5).join(" ")}--> ` : " ";
+    });
+  return s.length > MAX_PAGE_HTML_CHARS ? s.slice(0, MAX_PAGE_HTML_CHARS) : s;
+}
+
+export function makePage(url: string, kind: PageKind, rawHtml: string): PageData {
+  const html = slimHtml(rawHtml);
   return { url, kind, html, text: htmlToText(html), links: extractLinks(html, url) };
 }
 
