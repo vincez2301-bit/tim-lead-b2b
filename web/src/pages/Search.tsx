@@ -13,8 +13,9 @@ import type { SearchRow } from "../lib/db-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { useDebounced } from "../lib/hooks";
 import { getBatchSize, getKeywordSet, getLimits, getRegions, locationNames, useSettings } from "../lib/settings";
-import { Notice, Spinner, TableWrap } from "../components/ui";
+import { Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { PipelineRunner } from "../components/PipelineRunner";
+import { confirmDialog } from "../components/dialog";
 
 const MAX_KEYWORDS = 20;
 const MAX_KEYWORD_LEN = 120;
@@ -142,11 +143,13 @@ export function SearchPage() {
     let confirm = false;
     const needs = estimate ? estimate.needs_confirmation : true;
     if (needs) {
-      const ok = window.confirm(
-        `Lần chạy này dùng khoảng ${units} lượt Serper` +
-          (estimate ? ` (còn ${estimate.remaining_today} lượt hôm nay)` : "") +
-          ". Tiếp tục?",
-      );
+      const ok = await confirmDialog({
+        title: `Dùng khoảng ${units} lượt Serper?`,
+        message:
+          (estimate ? `Hôm nay còn ${estimate.remaining_today} lượt. ` : "Chưa ước tính xong hạn mức còn lại. ") +
+          "Mỗi từ khoá × mỗi trang kết quả tốn 1 lượt.",
+        confirmLabel: "Chạy tìm kiếm",
+      });
       if (!ok) return;
       confirm = true;
     }
@@ -181,7 +184,10 @@ export function SearchPage() {
 
   return (
     <section>
-      <h1>Tìm kiếm công ty</h1>
+      <PageHeader
+        title="Tìm kiếm công ty"
+        description="Tìm công ty mới qua Google Search / Maps, rồi chạy pipeline để đọc website, YouTube và người liên hệ."
+      />
       {settingsError && <Notice kind="error">{settingsError}</Notice>}
       <div className="card">
         <div className="form-grid">

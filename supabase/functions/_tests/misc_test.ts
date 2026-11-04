@@ -121,6 +121,10 @@ Deno.test("Cohort filter: chỉ chấp nhận tín hiệu đã xác nhận và g
   assertThrows(() => parseCohortFilter({ must: ["x'); drop table companies;--"] }, codes), HttpError);
   assertThrows(() => parseCohortFilter({ min_score: 101 }, codes), HttpError);
   assertThrows(() => parseCohortFilter({ segments: ["hacker"] }, codes), HttpError);
+  assertEquals(parseCohortFilter({ cities: [" TP.HCM ", "TP.HCM"] }, codes).cities, ["TP.HCM"]);
+  assertEquals(parseCohortFilter({}, codes).cities, []);
+  assertThrows(() => parseCohortFilter({ cities: [1] }, codes), HttpError);
+  assertThrows(() => parseCohortFilter({ cities: ["x".repeat(61)] }, codes), HttpError);
 });
 
 Deno.test("DNC: domain cha và email theo domain", () => {

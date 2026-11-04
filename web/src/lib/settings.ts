@@ -59,3 +59,25 @@ export function locationNames(r: Region | undefined): string[] {
   if (!r?.locations) return [];
   return r.locations.map((l) => (typeof l === "string" ? l : l.name)).filter(Boolean);
 }
+
+/** Mọi địa danh của mọi khu vực (để lọc theo thành phố). */
+export function allCityNames(s: SettingsMap): string[] {
+  return [...new Set(getRegions(s).flatMap((r) => locationNames(r)))];
+}
+
+/** Đọc/ghi một lựa chọn lọc trong localStorage của trình duyệt (bỏ qua nếu bị chặn). */
+export function rememberedFilter(key: string): string {
+  try {
+    return localStorage.getItem(`slf.${key}`) ?? "";
+  } catch {
+    return "";
+  }
+}
+export function rememberFilter(key: string, value: string) {
+  try {
+    if (value) localStorage.setItem(`slf.${key}`, value);
+    else localStorage.removeItem(`slf.${key}`);
+  } catch {
+    /* trình duyệt chặn bộ nhớ: bỏ qua */
+  }
+}

@@ -5,7 +5,7 @@ import { callFn } from "../lib/api";
 import type { ScoreResponse } from "../lib/api-types";
 import type { SignalCode, SignalStatus } from "../lib/db-types";
 import { HINT_SIGNALS, SIGNAL_STATUS_LABEL, errMsg, fmtDate } from "../lib/format";
-import { Notice, SignalStatusBadge, Spinner, TableWrap } from "../components/ui";
+import { Notice, PageHeader, SignalStatusBadge, Spinner, TableWrap } from "../components/ui";
 
 const STATUSES: SignalStatus[] = ["proposed", "confirmed", "rejected"];
 
@@ -75,16 +75,20 @@ export function SignalsPage() {
 
   return (
     <section>
-      <div className="row space-between">
-        <h1>Tín hiệu</h1>
-        <button type="button" disabled={busy !== null} onClick={() => void rescoreAll()}>
-          {busy === "__all" ? "Đang tính…" : "Tính lại điểm tất cả công ty"}
-        </button>
-      </div>
-      <p className="muted">
-        Pipeline chỉ thu thập tín hiệu <strong>Đã xác nhận</strong> ({confirmedCount}/{signals.length}). Chỉ admin được
-        duyệt và chỉnh trọng số. Trọng số âm (ví dụ NO_WEBSITE) trừ điểm nhưng không tính vào mẫu số.
-      </p>
+      <PageHeader
+        title="Tín hiệu"
+        description={
+          <>
+            Pipeline chỉ thu thập tín hiệu <strong>Đã xác nhận</strong> ({confirmedCount}/{signals.length}). Chỉ admin được
+            duyệt và chỉnh trọng số. Trọng số âm (ví dụ NO_WEBSITE) trừ điểm nhưng không tính vào mẫu số.
+          </>
+        }
+        actions={
+          <button type="button" disabled={busy !== null} onClick={() => void rescoreAll()}>
+            {busy === "__all" ? "Đang tính…" : "Tính lại điểm tất cả công ty"}
+          </button>
+        }
+      />
       {!isAdmin && <Notice kind="info">Bạn đang xem ở chế độ chỉ đọc.</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       {info && <Notice kind="ok">{info}</Notice>}

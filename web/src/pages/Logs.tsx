@@ -6,7 +6,7 @@ import type { EnrichYoutubeResponse, RunStatus } from "../lib/api-types";
 import type { AuditRow, Profile, Run, Step } from "../lib/db-types";
 import { RUN_STATUS_LABEL, STEPS, STEP_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { getBatchSize, useSettings } from "../lib/settings";
-import { JsonText, Notice, RunStatusBadge, Spinner, TableWrap } from "../components/ui";
+import { JsonText, Notice, PageHeader, RunStatusBadge, Spinner, TableWrap } from "../components/ui";
 
 const RUN_STATUSES: RunStatus[] = ["running", "done", "failed", "partial"];
 
@@ -120,7 +120,7 @@ export function LogsPage() {
 
   return (
     <section>
-      <h1>Nhật ký</h1>
+      <PageHeader title="Nhật ký" description="Các lượt chạy pipeline và thao tác quan trọng (audit log)." />
       {error && <Notice kind="error">{error}</Notice>}
       <div className="card">
         <h2>Lượt chạy pipeline</h2>

@@ -5,7 +5,7 @@ import { callFn, runBatched, type BatchFn } from "../lib/api";
 import type { ScoreResponse } from "../lib/api-types";
 import type { Company, Contact, Observation, SignalCode } from "../lib/db-types";
 import { HINT_SIGNALS, SEGMENT_LABEL, STEP_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
-import { Badge, EmailLabelBadge, Notice, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
+import { Badge, EmailLabelBadge, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
 
 type Action = BatchFn | "score";
@@ -94,15 +94,23 @@ export function CompanyDetailPage() {
 
   return (
     <section>
-      <p>
+      <p className="small">
         <Link to="/companies">← Danh sách công ty</Link>
       </p>
-      <div className="row space-between">
-        <h1>
-          {company.name} {company.is_dnc && <Badge tone="red">DNC</Badge>}
-        </h1>
-        <ScorePill score={company.score} />
-      </div>
+      <PageHeader
+        title={
+          <span className="row">
+            {company.name} {company.is_dnc && <Badge tone="red">DNC</Badge>}
+          </span>
+        }
+        description={[company.city, company.domain].filter(Boolean).join(" · ") || undefined}
+        actions={
+          <span className="row">
+            <span className="muted small">Điểm</span>
+            <ScorePill score={company.score} />
+          </span>
+        }
+      />
       {error && <Notice kind="error">{error}</Notice>}
       {company.is_dnc && (
         <Notice kind="warn">Công ty thuộc danh sách loại trừ (DNC) — không liên hệ, không export.</Notice>

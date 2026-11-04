@@ -7,8 +7,10 @@ import type { CohortFilter, CohortQueryResponse, CohortRange, Segment } from "..
 import type { CohortSaved, SignalCode } from "../lib/db-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { useDebounced } from "../lib/hooks";
-import { Badge, Notice, ScorePill, StatusBadge, TableWrap } from "../components/ui";
+import { Badge, Notice, PageHeader, ScorePill, StatusBadge, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
+import { confirmDialog, promptDialog } from "../components/dialog";
+import { allCityNames, useSettings } from "../lib/settings";
 
 interface RangeRow {
   code: string;
@@ -34,6 +36,9 @@ export function CohortPage() {
   const [ranges, setRanges] = useState<RangeRow[]>([]);
   const [minScore, setMinScore] = useState("");
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const { settings } = useSettings();
+  const cityOptions = useMemo(() => allCityNames(settings), [settings]);
   const [q, setQ] = useState("");
   const [includeDnc, setIncludeDnc] = useState(false);
 
@@ -71,10 +76,11 @@ export function CohortPage() {
       ranges: rs,
       min_score: toNum(minScore),
       segments,
+      cities,
       q: q.trim() || undefined,
       include_dnc: includeDnc,
     };
-  }, [must, exclude, ranges, minScore, segments, q, includeDnc]);
+  }, [must, exclude, ranges, minScore, segments, cities, q, includeDnc]);
 
   // Đếm kết quả "theo thời gian thực" (debounce) — mục 9.
   const dFilter = useDebounced(filter, 500);
@@ -99,7 +105,7 @@ export function CohortPage() {
   }
 
   async function save() {
-    const name = window.prompt("Tên cohort:");
+    const name = await promptDialog({ title: "Lưu cohort", message: "Đặt tên để dùng lại bộ lọc này.", placeholder: "vd. Agency TP.HCM có YouTube", confirmLabel: "Lưu" });
     if (!name?.trim() || !session) return;
     const { error } = await supabase
       .from("cohorts")
@@ -124,13 +130,14 @@ export function CohortPage() {
     );
     setMinScore(f.min_score === null || f.min_score === undefined ? "" : String(f.min_score));
     setSegments(asArray(f.segments) as Segment[]);
+    setCities(asArray(f.cities));
     setQ(typeof f.q === "string" ? f.q : "");
     setIncludeDnc(f.include_dnc === true);
     setInfo(`Đã tải cohort "${c.name}".`);
   }
 
   async function remove(c: CohortSaved) {
-    if (!window.confirm(`Xoá cohort "${c.name}"?`)) return;
+    if (!(await confirmDialog({ title: `Xoá cohort "${c.name}"?`, confirmLabel: "Xoá", danger: true }))) return;
     const { error } = await supabase.from("cohorts").delete().eq("id", c.id);
     if (error) setError(error.message);
     await loadSaved();
@@ -154,7 +161,10 @@ export function CohortPage() {
 
   return (
     <section>
-      <h1>Cohort builder</h1>
+      <PageHeader
+        title="Cohort & xuất file"
+        description="Lọc công ty theo tín hiệu và điểm, lưu bộ lọc để dùng lại, xuất CSV / Excel để gọi điện hoặc gửi email."
+      />
       <div className="card">
         <div className="grid two">
           <fieldset>
@@ -257,6 +267,23 @@ export function CohortPage() {
             ))}
           </div>
         </fieldset>
+        {cityOptions.length > 0 && (
+          <fieldset>
+            <legend>Thành phố</legend>
+            <div className="chips">
+              {cityOptions.map((c) => (
+                <label key={c} className={cities.includes(c) ? "chip on" : "chip"}>
+                  <input
+                    type="checkbox"
+                    checked={cities.includes(c)}
+                    onChange={() => setCities((v) => (v.includes(c) ? v.filter((x) => x !== c) : [...v, c]))}
+                  />
+                  {c}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
         <label className="checkbox">
           <input type="checkbox" checked={includeDnc} onChange={(e) => setIncludeDnc(e.target.checked)} />
           Xem cả công ty thuộc DNC (export luôn loại DNC)

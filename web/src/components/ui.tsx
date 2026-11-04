@@ -1,12 +1,40 @@
 import type { ReactNode } from "react";
+import { CircleAlert, CircleCheck, Inbox, Info, TriangleAlert } from "lucide-react";
 import type { CompanyStatus, EmailLabel, RunStatus } from "../lib/api-types";
 import type { SignalStatus } from "../lib/db-types";
 import { EMAIL_LABEL, RUN_STATUS_LABEL, SIGNAL_STATUS_LABEL, STATUS_LABEL } from "../lib/format";
 
+const NOTICE_ICON = { info: Info, warn: TriangleAlert, error: CircleAlert, ok: CircleCheck };
+
 export function Notice({ kind = "info", children }: { kind?: "info" | "warn" | "error" | "ok"; children: ReactNode }) {
+  const Icon = NOTICE_ICON[kind];
   return (
     <div className={`notice notice-${kind}`} role={kind === "error" ? "alert" : "status"}>
-      {children}
+      <Icon aria-hidden="true" />
+      <div>{children}</div>
+    </div>
+  );
+}
+
+/** Tiêu đề trang: tên, mô tả ngắn, nút hành động bên phải. */
+export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="page-header">
+      <div>
+        <h1>{title}</h1>
+        {description && <p>{description}</p>}
+      </div>
+      {actions && <div className="actions">{actions}</div>}
+    </div>
+  );
+}
+
+export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="empty">
+      <Inbox aria-hidden="true" />
+      <strong>{title}</strong>
+      {children && <div>{children}</div>}
     </div>
   );
 }
@@ -16,7 +44,11 @@ export function TableWrap({ children }: { children: ReactNode }) {
 }
 
 export function Spinner({ label = "Đang tải…" }: { label?: string }) {
-  return <p className="muted">{label}</p>;
+  return (
+    <div className="spinner" role="status">
+      {label}
+    </div>
+  );
 }
 
 export function Badge({ tone = "gray", children, title }: { tone?: string; children: ReactNode; title?: string }) {
@@ -63,7 +95,11 @@ export function SignalStatusBadge({ status }: { status: SignalStatus }) {
 export function ScorePill({ score }: { score: number | null }) {
   if (score === null || score === undefined) return <span className="muted">—</span>;
   const tone = score >= 60 ? "green" : score >= 30 ? "orange" : "gray";
-  return <Badge tone={tone}>{score}</Badge>;
+  return (
+    <span className={`badge score badge-${tone}`} title="Điểm 0–100">
+      {score}
+    </span>
+  );
 }
 
 /** Hiển thị JSON dạng văn bản thuần (không bao giờ dựng HTML từ dữ liệu). */

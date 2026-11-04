@@ -130,6 +130,7 @@ export interface CohortFilter {
   max_score?: number | null;
   segments?: Segment[];
   statuses?: CompanyStatus[];
+  cities?: string[]; // tên thành phố (companies.city), không phân biệt hoa thường
   q?: string; // tìm theo tên / domain
   include_dnc?: boolean; // chỉ có tác dụng khi xem; export LUÔN loại DNC
 }

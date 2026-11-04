@@ -6,8 +6,9 @@ import type { CohortQueryRequest, CohortQueryResponse, CompanyStatus, Segment } 
 import type { SignalCode } from "../lib/db-types";
 import { SEGMENTS, SEGMENT_LABEL, STATUSES, STATUS_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { useDebounced } from "../lib/hooks";
-import { getBatchSize, useSettings } from "../lib/settings";
-import { Badge, Notice, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
+import { allCityNames, getBatchSize, rememberFilter, rememberedFilter, useSettings } from "../lib/settings";
+import { Play, X } from "lucide-react";
+import { Badge, EmptyState, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
 import { PipelineRunner } from "../components/PipelineRunner";
 
@@ -40,6 +41,7 @@ export function CompaniesPage() {
   const [minScore, setMinScore] = useState("");
   const [q, setQ] = useState("");
   const [signal, setSignal] = useState("");
+  const [city, setCity] = useState(() => rememberedFilter("companies.city"));
   const [showDnc, setShowDnc] = useState(false);
   const [sort, setSort] = useState<Sort>("score");
   const [page, setPage] = useState(0);
@@ -63,7 +65,9 @@ export function CompaniesPage() {
 
   const dq = useDebounced(q, 400);
   const dMin = useDebounced(minScore, 400);
-  const filterKey = JSON.stringify([segment, status, dMin, dq, signal, showDnc, sort]);
+  useEffect(() => rememberFilter("companies.city", city), [city]);
+  const cities = useMemo(() => allCityNames(settings), [settings]);
+  const filterKey = JSON.stringify([segment, status, dMin, dq, signal, city, showDnc, sort]);
   useEffect(() => setPage(0), [filterKey]);
 
   useEffect(() => {
@@ -79,6 +83,7 @@ export function CompaniesPage() {
             must: [signal],
             segments: segment ? [segment] : [],
             statuses: status ? [status] : [],
+            cities: city ? [city] : [],
             min_score: min !== null && Number.isFinite(min) ? min : null,
             q: query || undefined,
             include_dnc: showDnc,
@@ -96,6 +101,7 @@ export function CompaniesPage() {
           .select("id,name,domain,website_url,segment,city,status,score,is_dnc,last_seen_at", { count: "exact" });
         if (segment) qb = qb.eq("segment", segment);
         if (status) qb = qb.eq("status", status);
+        if (city) qb = qb.ilike("city", city.replace(/[%_\\]/g, (c) => `\\${c}`));
         if (min !== null && Number.isFinite(min)) qb = qb.gte("score", min);
         if (!showDnc) qb = qb.eq("is_dnc", false);
         if (query) qb = qb.or(`name.ilike.*${query}*,domain.ilike.*${query}*`);
@@ -117,7 +123,7 @@ export function CompaniesPage() {
     return () => {
       alive = false;
     };
-  }, [filterKey, page, reloadKey, dMin, dq, segment, status, signal, showDnc, sort]);
+  }, [filterKey, page, reloadKey, dMin, dq, segment, status, signal, city, showDnc, sort]);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const allOnPage = useMemo(() => (rows ?? []).map((r) => r.id), [rows]);
@@ -142,7 +148,10 @@ export function CompaniesPage() {
 
   return (
     <section>
-      <h1>Danh sách công ty</h1>
+      <PageHeader
+        title="Công ty"
+        description="Lead đã thu thập, xếp theo điểm. Tích chọn để chạy pipeline, bấm tên để xem vì sao công ty có điểm đó."
+      />
       <div className="card">
         <div className="form-grid">
           <label>
@@ -156,6 +165,17 @@ export function CompaniesPage() {
               {SEGMENTS.map((s) => (
                 <option key={s} value={s}>
                   {SEGMENT_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Thành phố
+            <select value={city} onChange={(e) => setCity(e.target.value)}>
+              <option value="">Tất cả</option>
+              {cities.map((c) => (
+                <option key={c} value={c}>
+                  {c}
                 </option>
               ))}
             </select>
@@ -203,28 +223,22 @@ export function CompaniesPage() {
 
       {error && <Notice kind="error">{error}</Notice>}
 
-      <div className="row space-between">
-        <span className="muted">{fmtNum(total)} công ty</span>
-        <div className="row">
-          <span className="muted small">Đã chọn {selected.size}</span>
-          <button type="button" disabled={selected.size === 0} onClick={() => setShowRunner(true)}>
-            Chạy pipeline cho mục đã chọn
-          </button>
-          {selected.size > 0 && (
-            <button type="button" className="btn-link" onClick={() => setSelected(new Set())}>
-              Bỏ chọn
-            </button>
-          )}
-        </div>
+      <div className="toolbar">
+        <span className="muted">
+          <strong className="stat-inline">{fmtNum(total)}</strong> công ty{city ? ` · ${city}` : ""}
+        </span>
+        {selected.size === 0 && <span className="muted small">Tích chọn công ty để chạy pipeline.</span>}
       </div>
 
       {showRunner && selected.size > 0 && (
+        <div id="runner">
         <PipelineRunner
           key={[...selected].join(",")}
           companyIds={[...selected]}
           batchSize={getBatchSize(settings)}
           onFinished={() => setReloadKey((k) => k + 1)}
         />
+        </div>
       )}
 
       {!rows ? (
@@ -249,8 +263,10 @@ export function CompaniesPage() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="muted">
-                    Không có công ty phù hợp.
+                  <td colSpan={8}>
+                    <EmptyState title="Không có công ty phù hợp">
+                      Thử bỏ bớt bộ lọc, hoặc <Link to="/search">tìm thêm công ty</Link>.
+                    </EmptyState>
                   </td>
                 </tr>
               )}
@@ -285,6 +301,26 @@ export function CompaniesPage() {
         </TableWrap>
       )}
 
+      {selected.size > 0 && (
+        <div className="bulkbar" role="region" aria-label="Thao tác với mục đã chọn">
+          <span>
+            Đã chọn <strong>{selected.size}</strong> công ty
+          </span>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => {
+              setShowRunner(true);
+              requestAnimationFrame(() => document.getElementById("runner")?.scrollIntoView({ behavior: "smooth" }));
+            }}
+          >
+            <Play aria-hidden="true" /> Chạy pipeline
+          </button>
+          <button type="button" className="btn-link" onClick={() => setSelected(new Set())}>
+            <X aria-hidden="true" /> Bỏ chọn
+          </button>
+        </div>
+      )}
       <div className="row pager">
         <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
           ← Trước

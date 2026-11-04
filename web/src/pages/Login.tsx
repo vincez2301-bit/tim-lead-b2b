@@ -50,8 +50,19 @@ export function LoginPage() {
   return (
     <main className="login">
       <form className="card login-card" onSubmit={(e) => void submit(e)}>
-        <h1>Sync Lead Finder</h1>
-        <p className="muted">Đăng nhập bằng tài khoản được admin mời.</p>
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            S
+          </span>
+          <span>
+            Sync Lead Finder
+            <small>Tìm khách hàng B2B</small>
+          </span>
+        </div>
+        <div>
+          <h1>Đăng nhập</h1>
+          <p className="muted">Dùng tài khoản được admin tạo cho bạn.</p>
+        </div>
         <div className="tabs">
           <button type="button" className={mode === "password" ? "tab active" : "tab"} onClick={() => setMode("password")}>
             Mật khẩu

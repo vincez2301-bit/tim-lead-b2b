@@ -4,7 +4,8 @@ import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import type { Profile, Role } from "../lib/db-types";
 import { errMsg, fmtDate } from "../lib/format";
-import { Notice, Spinner, TableWrap } from "../components/ui";
+import { Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
+import { confirmDialog } from "../components/dialog";
 
 const KEY_INFO: Record<string, { label: string; help: string; shape: "array" | "object" }> = {
   regions: {
@@ -145,7 +146,11 @@ function UsersSection() {
   }, [load]);
 
   async function setRole(p: Profile, role: Role) {
-    if (p.user_id === session?.user.id && role !== "admin" && !window.confirm("Bạn đang tự hạ quyền admin của mình. Tiếp tục?"))
+    if (
+      p.user_id === session?.user.id &&
+      role !== "admin" &&
+      !(await confirmDialog({ title: "Tự hạ quyền admin?", message: "Bạn sẽ mất quyền quản trị ngay sau khi lưu.", confirmLabel: "Hạ quyền", danger: true }))
+    )
       return;
     setError(null);
     const { error } = await supabase.from("profiles").update({ role }).eq("user_id", p.user_id);
@@ -204,7 +209,7 @@ function PurgeSection({ defaultMonths }: { defaultMonths: number }) {
       setMsg({ kind: "error", text: "Số tháng phải là số nguyên ≥ 1." });
       return;
     }
-    if (!window.confirm(`Xoá vĩnh viễn mọi lead không có tương tác trong ${m} tháng qua? Không thể hoàn tác.`)) return;
+    if (!(await confirmDialog({ title: "Xoá lead cũ?", message: `Xoá vĩnh viễn mọi lead không có tương tác trong ${m} tháng qua. Không thể hoàn tác.`, confirmLabel: "Xoá vĩnh viễn", danger: true }))) return;
     setBusy(true);
     setMsg(null);
     const { data, error } = await supabase.rpc("purge_stale_leads", { p_months: m });
@@ -273,7 +278,7 @@ function MfaSection() {
   }
 
   async function remove(id: string) {
-    if (!window.confirm("Tắt thiết bị xác thực này?")) return;
+    if (!(await confirmDialog({ title: "Tắt thiết bị xác thực này?", confirmLabel: "Tắt", danger: true }))) return;
     const { error } = await supabase.auth.mfa.unenroll({ factorId: id });
     if (error) setMsg({ kind: "error", text: error.message });
     await load();
@@ -345,7 +350,7 @@ export function SettingsPage() {
 
   return (
     <section>
-      <h1>Cài đặt</h1>
+      <PageHeader title="Cài đặt" description="Bảo mật tài khoản, người dùng, hạn mức API và bộ từ khoá mặc định." />
       {!isAdmin && <Notice kind="info">Chỉ admin được sửa cài đặt. Vai trò của bạn: {profile?.role ?? "user"}.</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       <MfaSection />

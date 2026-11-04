@@ -5,7 +5,8 @@ import { parseCsv } from "../lib/csv";
 import type { DncReason, DncRow } from "../lib/db-types";
 import { DNC_REASONS, DNC_REASON_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { useDebounced } from "../lib/hooks";
-import { Notice, Spinner, TableWrap } from "../components/ui";
+import { Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
+import { confirmDialog } from "../components/dialog";
 
 type Kind = "domain" | "email";
 interface NewRow {
@@ -106,7 +107,7 @@ export function DncPage() {
   }
 
   async function remove(r: DncRow) {
-    if (!window.confirm(`Xoá ${r.value} khỏi danh sách loại trừ? Công ty/email này có thể được thu thập lại.`)) return;
+    if (!(await confirmDialog({ title: `Xoá ${r.value} khỏi danh sách loại trừ?`, message: "Công ty/email này có thể được thu thập lại.", confirmLabel: "Xoá", danger: true }))) return;
     const { error } = await supabase.from("do_not_contact").delete().eq("id", r.id);
     if (error) setError(error.message);
     await load();
@@ -163,9 +164,12 @@ export function DncPage() {
     const v = fValue.trim();
     if (!v) return;
     if (
-      !window.confirm(
-        `Xoá toàn bộ dữ liệu liên quan tới ${v} (${fKind === "domain" ? "công ty, observation, liên hệ" : "liên hệ và email"}) và thêm vào danh sách loại trừ? Không thể hoàn tác.`,
-      )
+      !(await confirmDialog({
+        title: `Xoá toàn bộ dữ liệu của ${v}?`,
+        message: `Xoá ${fKind === "domain" ? "công ty, observation, liên hệ" : "liên hệ và email"} liên quan rồi thêm vào danh sách loại trừ. Không thể hoàn tác.`,
+        confirmLabel: "Xoá vĩnh viễn",
+        danger: true,
+      }))
     )
       return;
     setBusy(true);
@@ -192,10 +196,10 @@ export function DncPage() {
 
   return (
     <section>
-      <h1>Danh sách loại trừ (DNC)</h1>
-      <p className="muted">
-        Domain/email trong danh sách này bị bỏ qua ở mọi nơi: tìm kiếm, đọc website, cohort, giao diện và export.
-      </p>
+      <PageHeader
+        title="Danh sách loại trừ"
+        description="Khách hàng hiện tại, đối thủ hoặc người yêu cầu không liên hệ. Domain/email ở đây bị bỏ qua ở mọi nơi: tìm kiếm, đọc website, cohort và xuất file."
+      />
       {error && <Notice kind="error">{error}</Notice>}
       {info && <Notice kind="ok">{info}</Notice>}
 

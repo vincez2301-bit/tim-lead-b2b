@@ -5,7 +5,8 @@ import { callFn } from "../lib/api";
 import type { EstimateResponse, Segment } from "../lib/api-types";
 import type { CompanyStat, Run } from "../lib/db-types";
 import { SEGMENT_LABEL, STATUSES, STATUS_LABEL, STEP_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
-import { Notice, RunStatusBadge, Spinner, TableWrap } from "../components/ui";
+import { Check, Search } from "lucide-react";
+import { EmptyState, Notice, PageHeader, RunStatusBadge, Spinner, TableWrap } from "../components/ui";
 import { QuotaCard } from "../components/QuotaCard";
 
 export function OverviewPage() {
@@ -58,16 +59,69 @@ export function OverviewPage() {
 
   if (!stats) return <Spinner />;
 
+  const processed = (agg.byStatus.get("profiled") ?? 0) + (agg.byStatus.get("enriched") ?? 0);
+  const steps = [
+    {
+      done: (confirmed ?? 0) > 0,
+      title: "Duyệt tín hiệu cần thu thập",
+      hint: "Pipeline chỉ ghi nhận tín hiệu đã xác nhận (admin làm một lần).",
+      to: "/signals",
+      cta: "Mở Tín hiệu",
+    },
+    {
+      done: agg.total > 0,
+      title: "Tìm công ty mới",
+      hint: "Chọn nhóm khách, địa danh và bộ từ khoá rồi chạy tìm kiếm.",
+      to: "/search",
+      cta: "Tìm kiếm",
+    },
+    {
+      done: processed > 0,
+      title: "Chạy pipeline",
+      hint: "Đọc website, kênh YouTube và người liên hệ để chấm điểm.",
+      to: "/companies",
+      cta: "Mở Công ty",
+    },
+    {
+      done: false,
+      title: "Lọc và xuất danh sách để liên hệ",
+      hint: "Lọc theo điểm, tín hiệu, thành phố rồi xuất CSV / Excel.",
+      to: "/cohort",
+      cta: "Mở Cohort",
+    },
+  ];
+  const next = steps.findIndex((x) => !x.done);
+
   return (
     <section>
-      <h1>Tổng quan</h1>
+      <PageHeader
+        title="Tổng quan"
+        description="Tình hình dữ liệu, hạn mức API hôm nay và việc nên làm tiếp."
+        actions={
+          <Link className="btn btn-primary" to="/search">
+            <Search aria-hidden="true" /> Tìm kiếm mới
+          </Link>
+        }
+      />
       {error && <Notice kind="error">{error}</Notice>}
-      {confirmed === 0 && (
-        <Notice kind="warn">
-          Chưa có tín hiệu nào được xác nhận — pipeline sẽ không ghi nhận observation nào. Vào{" "}
-          <Link to="/signals">Tín hiệu</Link> để admin duyệt.
-        </Notice>
-      )}
+
+      <div className="card">
+        <h2>Bắt đầu nhanh</h2>
+        <ol className="checklist">
+          {steps.map((st, i) => (
+            <li key={st.title} className={st.done ? "done" : i === next ? "next" : ""}>
+              <span className="dot">{st.done ? <Check size={14} aria-label="Xong" /> : i + 1}</span>
+              <div className="text">
+                <strong>{st.title}</strong>
+                <span>{st.hint}</span>
+              </div>
+              <Link className={i === next ? "btn btn-primary" : "btn"} to={st.to}>
+                {st.cta}
+              </Link>
+            </li>
+          ))}
+        </ol>
+      </div>
 
       <div className="grid">
         <div className="card stat">
@@ -133,7 +187,7 @@ export function OverviewPage() {
           <Link to="/logs">Xem tất cả</Link>
         </div>
         {runs.length === 0 ? (
-          <p className="muted">Chưa có lượt chạy nào.</p>
+          <EmptyState title="Chưa có lượt chạy nào">Chạy tìm kiếm hoặc pipeline để thấy lịch sử ở đây.</EmptyState>
         ) : (
           <TableWrap>
             <table>

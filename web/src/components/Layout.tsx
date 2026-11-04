@@ -1,53 +1,117 @@
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router";
+import {
+  Ban,
+  Building2,
+  LayoutDashboard,
+  ListFilter,
+  LogOut,
+  Menu,
+  Radar,
+  ScrollText,
+  Search,
+  Settings,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { DialogHost } from "./dialog";
 
-const NAV = [
-  { to: "/", label: "Tổng quan", end: true },
-  { to: "/search", label: "Tìm kiếm" },
-  { to: "/companies", label: "Công ty" },
-  { to: "/cohort", label: "Cohort" },
-  { to: "/signals", label: "Tín hiệu" },
-  { to: "/dnc", label: "Loại trừ" },
-  { to: "/settings", label: "Cài đặt" },
-  { to: "/logs", label: "Nhật ký" },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+}
+
+const WORK: NavItem[] = [
+  { to: "/", label: "Tổng quan", icon: LayoutDashboard, end: true },
+  { to: "/search", label: "Tìm kiếm", icon: Search },
+  { to: "/companies", label: "Công ty", icon: Building2 },
+  { to: "/cohort", label: "Cohort & xuất file", icon: ListFilter },
 ];
+const ADMIN: NavItem[] = [
+  { to: "/signals", label: "Tín hiệu", icon: Radar },
+  { to: "/dnc", label: "Loại trừ", icon: Ban },
+  { to: "/settings", label: "Cài đặt", icon: Settings },
+  { to: "/logs", label: "Nhật ký", icon: ScrollText },
+];
+
+function Brand() {
+  return (
+    <div className="brand">
+      <span className="brand-mark" aria-hidden="true">
+        S
+      </span>
+      <span>
+        Sync Lead Finder
+        <small>Tìm khách hàng B2B</small>
+      </span>
+    </div>
+  );
+}
+
+function Links({ items }: { items: NavItem[] }) {
+  return (
+    <>
+      {items.map(({ to, label, icon: Icon, end }) => (
+        <NavLink key={to} to={to} end={end}>
+          <Icon aria-hidden="true" />
+          {label}
+        </NavLink>
+      ))}
+    </>
+  );
+}
 
 export function Layout() {
   const { profile, session, isAdmin, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  useEffect(() => setOpen(false), [pathname]);
+
+  const email = profile?.email ?? session?.user.email ?? "";
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">Sync Lead Finder</div>
-        <button
-          type="button"
-          className="nav-toggle"
-          aria-expanded={open}
-          aria-controls="main-nav"
-          onClick={() => setOpen((o) => !o)}
-        >
-          Menu
+      <header className="mobilebar">
+        <Brand />
+        <button type="button" className="btn-icon" aria-expanded={open} aria-controls="sidebar" aria-label="Mở menu" onClick={() => setOpen(true)}>
+          <Menu />
         </button>
-        <nav id="main-nav" className={open ? "nav open" : "nav"}>
-          {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end} onClick={() => setOpen(false)}>
-              {n.label}
-            </NavLink>
-          ))}
+      </header>
+      {open && <div className="scrim" onClick={() => setOpen(false)} aria-hidden="true" />}
+      <aside id="sidebar" className={open ? "sidebar open" : "sidebar"}>
+        <div className="row space-between nowrap">
+          <Brand />
+          {open && (
+            <button type="button" className="btn-icon" aria-label="Đóng menu" onClick={() => setOpen(false)}>
+              <X />
+            </button>
+          )}
+        </div>
+        <nav className="nav" aria-label="Điều hướng chính">
+          <div className="nav-section">Làm việc</div>
+          <Links items={WORK} />
+          <div className="nav-section">Quản trị</div>
+          <Links items={ADMIN} />
         </nav>
         <div className="userbox">
-          <span className="muted small">
-            {profile?.email ?? session?.user.email} · {isAdmin ? "admin" : "user"}
+          <span className="avatar" aria-hidden="true">
+            {email.slice(0, 2) || "?"}
           </span>
-          <button type="button" className="btn-link" onClick={() => void signOut()}>
-            Đăng xuất
+          <div className="who">
+            <strong title={email}>{email}</strong>
+            <span>{isAdmin ? "Quản trị viên" : "Thành viên"}</span>
+          </div>
+          <button type="button" className="btn-icon" title="Đăng xuất" aria-label="Đăng xuất" onClick={() => void signOut()}>
+            <LogOut />
           </button>
         </div>
-      </header>
+      </aside>
       <main className="content">
         <Outlet />
       </main>
+      <DialogHost />
     </div>
   );
 }

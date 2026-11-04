@@ -40,6 +40,7 @@ insert into public.companies (id, name, domain, segment, status) values
   ('10000000-0000-0000-0000-000000000001', 'Alpha Production', 'alpha.vn', 'agency', 'profiled'),
   ('10000000-0000-0000-0000-000000000002', 'Beta Cosmetics',   'beta.com.vn', 'brand', 'profiled'),
   ('10000000-0000-0000-0000-000000000003', 'Gamma Films',      'gamma.vn', 'film', 'profiled');
+update public.companies set city = 'TP.HCM' where domain = 'alpha.vn';
 
 insert into public.runs (id, owner_id, step, provider) values
   ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', 'discover', 'serper'),
@@ -202,6 +203,9 @@ select pg_temp.ok((select array_agg(domain) from public.cohort_search('{"exclude
 select pg_temp.ok((select array_agg(domain) from public.cohort_search('{"ranges": [{"code": "ACTIVE_YOUTUBE", "min": 1, "max": 3}]}')) = array['beta.com.vn'],
   'cohort khoảng giá trị');
 select pg_temp.ok((select count(*) from public.cohort_search('{"min_score": 60}')) = 1, 'cohort min_score');
+select pg_temp.ok((select count(*) from public.cohort_search('{"cities": ["Không Có"]}')) = 0, 'cohort lọc thành phố không khớp');
+select pg_temp.ok((select count(*) from public.cohort_search('{"cities": []}')) = 2, 'cohort cities rỗng = không lọc');
+select pg_temp.ok((select array_agg(domain) from public.cohort_search('{"cities": [" tp.hcm "]}')) = array['alpha.vn'], 'cohort lọc thành phố');
 select pg_temp.ok((select count(*) from public.cohort_search('{"q": "%"}')) = 0, 'ký tự % trong q được escape');
 select pg_temp.ok((select count(*) from public.cohort_search('{"q": "alpha"}')) = 1, 'tìm theo tên');
 select pg_temp.ok((select count(*) from public.cohort_search('{"segments": ["brand"]}')) = 1, 'lọc theo nhóm');

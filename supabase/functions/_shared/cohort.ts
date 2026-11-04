@@ -29,6 +29,14 @@ function enumList<T extends string>(v: unknown, allowed: T[], field: string): T[
   return [...new Set(v as T[])];
 }
 
+function cityList(v: unknown): string[] {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v) || v.length > 20 || !v.every((x) => typeof x === "string" && x.trim() && x.length <= 60)) {
+    throw badRequest("cities phải là mảng tối đa 20 tên thành phố");
+  }
+  return [...new Set((v as string[]).map((x) => x.trim()))];
+}
+
 export function parseCohortFilter(raw: unknown, confirmedCodes: Set<string>): CohortFilter {
   if (raw !== undefined && (raw === null || typeof raw !== "object" || Array.isArray(raw))) {
     throw badRequest("filter phải là object");
@@ -56,6 +64,7 @@ export function parseCohortFilter(raw: unknown, confirmedCodes: Set<string>): Co
     max_score: optNum(f.max_score, "max_score", 0, 100),
     segments: enumList(f.segments, SEGMENTS, "segments"),
     statuses: enumList(f.statuses, STATUSES, "statuses"),
+    cities: cityList(f.cities),
     q: q || undefined,
     include_dnc: f.include_dnc === true,
   };
