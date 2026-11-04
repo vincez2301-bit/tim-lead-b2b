@@ -52,7 +52,10 @@ function assertPublicKey(key: string) {
 
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, ".", "");
-  const url = pick(env, ["VITE_SUPABASE_URL", "SUPABASE_URL"]);
+  // Chỉ lấy origin: người dùng hay dán nhầm "…supabase.co/rest/v1/" (gây lỗi "Invalid path specified in request URL").
+  const rawUrl = pick(env, ["VITE_SUPABASE_URL", "SUPABASE_URL"]);
+  const url = rawUrl ? new URL(rawUrl).origin : "";
+  if (rawUrl && url !== rawUrl.replace(/\/+$/, "")) console.warn(`[slf] Đã bỏ phần đường dẫn thừa trong SUPABASE_URL, dùng ${url}`);
   const key = pick(env, ["VITE_SUPABASE_ANON_KEY", "VITE_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY"]);
   assertPublicKey(key);
   if (command === "build") {
