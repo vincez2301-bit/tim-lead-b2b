@@ -6,7 +6,7 @@ export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
 
 export const configError: string | null =
   !SUPABASE_URL || !SUPABASE_ANON_KEY
-    ? "Thiếu VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY. Sao chép web/.env.example thành web/.env và điền giá trị."
+    ? "Thiếu URL hoặc publishable key Supabase (VITE_SUPABASE_URL/SUPABASE_URL, VITE_SUPABASE_ANON_KEY/SUPABASE_PUBLISHABLE_KEY). Sao chép web/.env.example thành web/.env và điền giá trị."
     : null;
 
 export const supabase: SupabaseClient = configError

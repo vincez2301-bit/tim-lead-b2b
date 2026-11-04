@@ -33,10 +33,34 @@ function cspPlugin(supabaseUrl: string): Plugin {
   };
 }
 
+// Nhận cả tên không tiền tố (SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) vì Vercel không cho
+// đặt biến VITE_* ở loại bí mật. Chỉ đúng 2 giá trị công khai này được đưa vào frontend.
+function pick(env: Record<string, string>, names: string[]): string {
+  for (const n of names) if (env[n]?.trim()) return env[n].trim();
+  return "";
+}
+
+function assertPublicKey(key: string) {
+  let role = "";
+  try {
+    role = JSON.parse(atob((key.split(".")[1] ?? "").replace(/-/g, "+").replace(/_/g, "/"))).role ?? "";
+  } catch { /* không phải JWT */ }
+  if (key.startsWith("sb_secret_") || role === "service_role") {
+    throw new Error("Khoá Supabase cho frontend là khoá BÍ MẬT. Dùng publishable/anon key, và tạo lại khoá bí mật vừa lộ.");
+  }
+}
+
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, ".", "VITE_");
+  const env = loadEnv(mode, ".", "");
+  const url = pick(env, ["VITE_SUPABASE_URL", "SUPABASE_URL"]);
+  const key = pick(env, ["VITE_SUPABASE_ANON_KEY", "VITE_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_ANON_KEY"]);
+  assertPublicKey(key);
   return {
-    plugins: [react(), cspPlugin(env.VITE_SUPABASE_URL ?? "")],
+    define: {
+      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(url),
+      "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(key),
+    },
+    plugins: [react(), cspPlugin(url)],
     build: {
       // Không nhúng asset nhỏ dưới dạng data: cho JS/CSS; giữ mọi thứ là file riêng.
       assetsInlineLimit: 0,

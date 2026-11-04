@@ -17,8 +17,8 @@ Chỉ có hai biến môi trường, đều công khai:
 
 | Biến | Ý nghĩa |
 |---|---|
-| `VITE_SUPABASE_URL` | URL project Supabase |
-| `VITE_SUPABASE_ANON_KEY` | Khoá anon / publishable |
+| `VITE_SUPABASE_URL` (hoặc `SUPABASE_URL`) | URL project Supabase |
+| `VITE_SUPABASE_ANON_KEY` (hoặc `SUPABASE_PUBLISHABLE_KEY`) | Khoá anon / publishable; build dừng nếu là khoá bí mật |
 
 **Không bao giờ** đặt `service_role`, `SERPER_API_KEY` hay `YOUTUBE_API_KEY` vào frontend.
 
@@ -43,7 +43,7 @@ Tải thư mục `dist/` lên bất kỳ hosting tĩnh nào (Netlify, Cloudflare
 
 - **SPA fallback**: mọi đường dẫn phải trả về `index.html`. `public/_redirects` đã cấu hình cho
   Netlify / Cloudflare Pages; Vercel dùng `vercel.json` (cùng fallback + header). Hosting khác cần cấu hình tương đương.
-- **Vercel**: Import repo → Root Directory = `web` (Vite tự nhận), thêm 2 biến `VITE_SUPABASE_*` cho Production. `vercel.json` bỏ qua build khi `web/` không đổi và không deploy nhánh `claude/*`.
+- **Vercel**: Import repo → Root Directory = `web` (Vite tự nhận), thêm 2 biến `SUPABASE_URL` và `SUPABASE_PUBLISHABLE_KEY` (Vercel không cho đặt `VITE_*` ở loại bí mật; build tự đổi tên). `vercel.json` bỏ qua build khi `web/` không đổi và không deploy nhánh `claude/*`.
 - **Header bảo mật**: `public/_headers` (Netlify / Cloudflare Pages), `vercel.json` (Vercel) đặt CSP, `X-Frame-Options`,
   `X-Content-Type-Options`, `Referrer-Policy`. Nên thay `https://*.supabase.co` bằng URL project cụ thể.
 - Bản build tự chèn thẻ `<meta http-equiv="Content-Security-Policy">` với `connect-src` = URL Supabase
