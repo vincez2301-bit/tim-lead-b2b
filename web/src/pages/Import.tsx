@@ -1,26 +1,16 @@
-import { useState, type ChangeEvent } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 import { Link } from "react-router";
 import { Upload } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { parseCsv } from "../lib/csv";
+import { readXlsx, type Sheet } from "../lib/xlsx";
+import { LEAD_FIELDS, findHeaderRow, guessMapping, rowsToLeads, type ImportRow, type LeadField, type Mapping } from "../lib/leadImport";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtNum } from "../lib/format";
-import { Notice, PageHeader } from "../components/ui";
+import { Notice, PageHeader, TableWrap } from "../components/ui";
 import { confirmDialog } from "../components/dialog";
 import { useSettings } from "../lib/settings";
 import { getPlaybook, mergeObjections, parseObjectionFile } from "../lib/pipeline";
-
-interface ImportRow {
-  name: string;
-  domain?: string;
-  segment?: string;
-  city?: string;
-  source?: string;
-  stage?: string;
-  contacts?: { full_name?: string; job_title?: string; email?: string; phone?: string }[];
-  activities?: unknown[];
-  [k: string]: unknown;
-}
 
 type Stats = Record<string, number>;
 
@@ -34,57 +24,6 @@ const STAT_LABEL: Record<string, string> = {
   skipped_dnc: "Bỏ qua (danh sách loại trừ)",
   skipped_invalid: "Bỏ qua (thiếu tên)",
 };
-
-const CSV_COLS = "company, domain, segment, city, source, contact_name, contact_title, contact_email, contact_phone, note";
-
-function segmentCode(v: string | undefined): string | undefined {
-  if (!v) return undefined;
-  const s = v.trim().toLowerCase();
-  const hit = SEGMENTS.find((k) => k === s || SEGMENT_LABEL[k].toLowerCase() === s);
-  if (hit) return hit;
-  if (/đài|broadcast|television|\btv\b/.test(s)) return "broadcaster";
-  if (/mcn|network|creator/.test(s)) return "mcn";
-  if (/production|agency|studio/.test(s)) return "agency";
-  if (/film|phim|post/.test(s)) return "film";
-  if (/brand|nhãn/.test(s)) return "brand";
-  return undefined;
-}
-
-/** CSV phẳng: mỗi dòng một người liên hệ; gộp theo tên công ty. */
-function fromCsv(text: string): ImportRow[] {
-  const [head, ...lines] = parseCsv(text);
-  const idx = (k: string) => head.findIndex((h) => h.trim().toLowerCase() === k);
-  const col = (r: string[], k: string) => {
-    const i = idx(k);
-    return i >= 0 ? (r[i] ?? "").trim() : "";
-  };
-  if (idx("company") < 0) throw new Error(`CSV cần cột "company". Các cột nhận: ${CSV_COLS}.`);
-  const map = new Map<string, ImportRow>();
-  for (const r of lines) {
-    const name = col(r, "company");
-    if (!name) continue;
-    const key = name.toLowerCase();
-    const row = map.get(key) ?? {
-      name,
-      domain: col(r, "domain") || undefined,
-      segment: segmentCode(col(r, "segment")),
-      city: col(r, "city") || undefined,
-      source: col(r, "source") || "CSV",
-      notes: col(r, "note") || undefined,
-      contacts: [],
-    };
-    if (col(r, "contact_name") || col(r, "contact_email")) {
-      row.contacts!.push({
-        full_name: col(r, "contact_name"),
-        job_title: col(r, "contact_title"),
-        email: col(r, "contact_email"),
-        phone: col(r, "contact_phone"),
-      });
-    }
-    map.set(key, row);
-  }
-  return [...map.values()];
-}
 
 function isPlaybookFile(j: unknown): boolean {
   if (!j || typeof j !== "object") return false;
@@ -102,6 +41,13 @@ export function ImportPage() {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<Stats | null>(null);
   const [playbookMsg, setPlaybookMsg] = useState<string | null>(null);
+  // File bảng (Excel / CSV): chọn trang tính, dòng tiêu đề, ghép cột.
+  const [sheets, setSheets] = useState<Sheet[] | null>(null);
+  const [sheetIdx, setSheetIdx] = useState(0);
+  const [headerRow, setHeaderRow] = useState(0);
+  const [mapping, setMapping] = useState<Mapping | null>(null);
+  const [defSegment, setDefSegment] = useState("");
+  const [defSource, setDefSource] = useState("");
   const { settings, save } = useSettings();
 
   /** File kịch bản xử lý từ chối ({kind:"bigfish-objections", items:[…]}) → gộp vào kho Xử lý từ chối. */
@@ -120,16 +66,47 @@ export function ImportPage() {
     setPlaybookMsg(`Đã nhập kịch bản: thêm ${added}, cập nhật ${updated} câu trả lời.`);
   }
 
+  function openSheet(list: Sheet[], i: number) {
+    const h = findHeaderRow(list[i]?.rows ?? []);
+    setSheets(list);
+    setSheetIdx(i);
+    setHeaderRow(h);
+    setMapping(guessMapping(list[i]?.rows[h] ?? []));
+  }
+
+  const tableRows = sheets?.[sheetIdx]?.rows ?? null;
+  const header = tableRows?.[headerRow] ?? [];
+  const mapped = useMemo(
+    () =>
+      tableRows && mapping && mapping.company >= 0
+        ? rowsToLeads(tableRows, headerRow, mapping, { segment: defSegment || undefined, source: defSource.trim() || "Excel" })
+        : null,
+    [tableRows, headerRow, mapping, defSegment, defSource],
+  );
+  const effectiveRows = sheets ? mapped : rows;
+
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     setError(null);
     setResult(null);
     setRows(null);
     setPlaybookMsg(null);
+    setSheets(null);
+    setMapping(null);
     e.target.value = "";
     if (!f) return;
     setFileName(f.name);
     try {
+      if (/\.xlsx$/i.test(f.name) || /\.csv$/i.test(f.name)) {
+        const list = /\.xlsx$/i.test(f.name)
+          ? await readXlsx(await f.arrayBuffer())
+          : [{ name: f.name, rows: parseCsv(await f.text()) }];
+        const first = Math.max(0, list.findIndex((x) => x.rows.length > 1));
+        openSheet(list, first);
+        setDefSource(f.name.replace(/\.(xlsx|csv)$/i, ""));
+        return;
+      }
+      if (/\.xls$/i.test(f.name)) throw new Error("File .xls (Excel đời cũ) chưa đọc được. Mở file bằng Excel → Lưu thành → .xlsx rồi chọn lại.");
       const text = await f.text();
       let data: ImportRow[];
       if (/\.json$/i.test(f.name)) {
@@ -141,7 +118,7 @@ export function ImportPage() {
         data = (Array.isArray(j) ? j : (j as { rows?: unknown }).rows) as ImportRow[];
         if (!Array.isArray(data)) throw new Error("File JSON phải là mảng lead (hoặc { rows: [...] }).");
       } else {
-        data = fromCsv(text);
+        throw new Error("Chỉ nhận file .xlsx, .csv hoặc .json.");
       }
       setRows(data.filter((r) => r && typeof r.name === "string" && r.name.trim()));
     } catch (err) {
@@ -150,6 +127,7 @@ export function ImportPage() {
   }
 
   async function run() {
+    const rows = effectiveRows;
     if (!rows) return;
     setBusy(true);
     setError(null);
@@ -170,10 +148,10 @@ export function ImportPage() {
     }
   }
 
-  const count = (f: (r: ImportRow) => number) => (rows ?? []).reduce((s, r) => s + f(r), 0);
+  const count = (f: (r: ImportRow) => number) => (effectiveRows ?? []).reduce((s, r) => s + f(r), 0);
   const bySeg = new Map<string, number>();
   const bySource = new Map<string, number>();
-  for (const r of rows ?? []) {
+  for (const r of effectiveRows ?? []) {
     bySeg.set(r.segment ?? "", (bySeg.get(r.segment ?? "") ?? 0) + 1);
     bySource.set(r.source ?? "—", (bySource.get(r.source ?? "—") ?? 0) + 1);
   }
@@ -188,14 +166,19 @@ export function ImportPage() {
       <div className="card">
         <h2>1. Chọn file</h2>
         <p className="muted small">
-          Nhận file <strong>.json</strong> (định dạng đầy đủ: lead, người liên hệ, lịch sử điểm chạm) hoặc <strong>.csv</strong> mỗi dòng một
-          người liên hệ với các cột: <code>{CSV_COLS}</code>. File kịch bản xử lý từ chối (<code>kich-ban-tu-choi.json</code>) cũng nhập
-          ở đây được — app tự nhận ra và đưa vào kho Xử lý từ chối.
+          Nhận file <strong>Excel (.xlsx)</strong> hoặc <strong>.csv</strong> bất kỳ: mỗi dòng là một công ty hoặc một người liên hệ, app tự nhận
+          ra các cột (tên công ty, website, người liên hệ, chức vụ, email, điện thoại…) và cho bạn chỉnh lại trước khi nhập. Cũng nhận file{" "}
+          <strong>.json</strong> đầy đủ (kèm lịch sử điểm chạm) và file kịch bản xử lý từ chối.
         </p>
         <label className="file-drop">
           <Upload aria-hidden="true" />
-          <span>{fileName || "Bấm để chọn file .json hoặc .csv"}</span>
-          <input type="file" accept=".json,.csv,application/json,text/csv" disabled={!isAdmin || busy} onChange={(e) => void onFile(e)} />
+          <span>{fileName || "Bấm để chọn file Excel, CSV hoặc JSON"}</span>
+          <input
+            type="file"
+            accept=".xlsx,.xls,.csv,.json,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            disabled={!isAdmin || busy}
+            onChange={(e) => void onFile(e)}
+          />
         </label>
       </div>
       {error && <Notice kind="error">{error}</Notice>}
@@ -204,13 +187,118 @@ export function ImportPage() {
           {playbookMsg} <Link to="/library/objections">Mở Xử lý từ chối →</Link>
         </Notice>
       )}
-      {rows && (
+      {sheets && mapping && tableRows && (
         <div className="card">
-          <h2>2. Kiểm tra trước khi nhập</h2>
+          <h2>2. Ghép cột</h2>
+          <p className="small muted">App đã đoán sẵn — chỉ cần kiểm tra. Cột nào không dùng thì để “—”.</p>
+          <div className="form-grid">
+            {sheets.length > 1 && (
+              <label>
+                Trang tính
+                <select value={sheetIdx} onChange={(e) => openSheet(sheets, Number(e.target.value))}>
+                  {sheets.map((sh, i) => (
+                    <option key={sh.name + i} value={i}>
+                      {sh.name} ({Math.max(0, sh.rows.length - 1)} dòng)
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label>
+              Dòng tiêu đề
+              <select
+                value={headerRow}
+                onChange={(e) => {
+                  const h = Number(e.target.value);
+                  setHeaderRow(h);
+                  setMapping(guessMapping(tableRows[h] ?? []));
+                }}
+              >
+                {tableRows.slice(0, 10).map((r, i) => (
+                  <option key={i} value={i}>
+                    Dòng {i + 1}: {r.filter(Boolean).slice(0, 3).join(" | ").slice(0, 60) || "(trống)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Nhóm khách khi file không ghi
+              <select value={defSegment} onChange={(e) => setDefSegment(e.target.value)}>
+                <option value="">— Chưa phân nhóm —</option>
+                {SEGMENTS.map((sg) => (
+                  <option key={sg} value={sg}>
+                    {SEGMENT_LABEL[sg]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Nguồn (khi file không ghi)
+              <input value={defSource} onChange={(e) => setDefSource(e.target.value)} placeholder="VD: Hội chợ ATF 2026" />
+            </label>
+          </div>
+          <div className="map-grid">
+            {LEAD_FIELDS.map((f) => (
+              <label key={f.key} className={f.key === "company" && mapping.company < 0 ? "missing" : ""} title={f.hint}>
+                {f.key === "company" ? `${f.label} *` : f.label}
+                <select
+                  value={mapping[f.key]}
+                  onChange={(e) => setMapping({ ...mapping, [f.key]: Number(e.target.value) } as Record<LeadField, number>)}
+                >
+                  <option value={-1}>—</option>
+                  {header.map((h, i) => (
+                    <option key={i} value={i}>
+                      {h || `Cột ${i + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+          {mapping.company < 0 && <Notice kind="warn">Chọn cột chứa tên công ty để tiếp tục.</Notice>}
+          {mapped && mapped.length > 0 && (
+            <>
+              <h3 className="sub">Xem trước 5 công ty đầu</h3>
+              <TableWrap>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Công ty</th>
+                      <th>Website</th>
+                      <th>Nhóm</th>
+                      <th>Thành phố</th>
+                      <th>Người liên hệ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mapped.slice(0, 5).map((r) => (
+                      <tr key={r.name}>
+                        <td>
+                          <strong>{r.name}</strong>
+                          {r.tier && <span className="small muted"> · hạng {r.tier}</span>}
+                        </td>
+                        <td className="small">{r.domain ?? "—"}</td>
+                        <td className="small">{r.segment ? SEGMENT_LABEL[r.segment as keyof typeof SEGMENT_LABEL] : "—"}</td>
+                        <td className="small">{r.city ?? "—"}</td>
+                        <td className="small">
+                          {(r.contacts ?? []).map((c) => [c.full_name, c.job_title, c.email, c.phone].filter(Boolean).join(" · ")).join("; ") || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </>
+          )}
+        </div>
+      )}
+      {effectiveRows && (
+        <div className="card">
+          <h2>{sheets ? "3" : "2"}. Kiểm tra trước khi nhập</h2>
           <div className="grid kpis">
             <div className="stat">
               <span className="stat-label">Công ty</span>
-              <span className="stat-value">{fmtNum(rows.length)}</span>
+              <span className="stat-value">{fmtNum(effectiveRows.length)}</span>
             </div>
             <div className="stat">
               <span className="stat-label">Người liên hệ</span>
@@ -245,14 +333,14 @@ export function ImportPage() {
           </div>
           <div className="row">
             <button type="button" className="btn-primary" disabled={!isAdmin || busy} onClick={() => void run()}>
-              {busy ? `Đang nhập… ${progress}/${rows.length}` : `Nhập ${rows.length} công ty`}
+              {busy ? `Đang nhập… ${progress}/${effectiveRows.length}` : `Nhập ${effectiveRows.length} công ty`}
             </button>
           </div>
         </div>
       )}
       {result && (
         <div className="card">
-          <h2>3. Kết quả</h2>
+          <h2>Kết quả</h2>
           <ul className="plain">
             {Object.entries(STAT_LABEL).map(([k, l]) => (
               <li key={k}>
@@ -262,7 +350,7 @@ export function ImportPage() {
           </ul>
           <div className="row">
             <Link className="btn btn-primary" to="/">
-              Mở Việc hôm nay
+              Mở Hôm nay
             </Link>
             <Link className="btn" to="/pipeline">
               Mở bảng pipeline

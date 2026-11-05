@@ -86,7 +86,7 @@ phần riêng ngành “Dịch vụ B2B”:
 | CH-05 | Cảnh báo cơ hội đứng yên | **Mới thêm**: thẻ “Đứng yên N ngày” khi 21 ngày không có điểm chạm hay đổi giai đoạn |
 | VC-01…04, BC-01 | Việc có hạn, ghi nhanh, dòng thời gian, điện thoại, “việc của tôi” | Có (Hôm nay, 19 điểm chạm) |
 | B2B-02, CS-02, BG-07 | Hợp đồng, ngày hết hạn, nhắc gia hạn | **Mới thêm**: `deals.renewal_at` tự điền mốc tròn năm kế tiếp từ ngày hiệu lực; Hôm nay có mục “Sắp gia hạn” 90 ngày; KPI trên Pipeline |
-| TH-01 | Nhập Excel | Một phần: JSON / CSV (chưa đọc thẳng .xlsx) |
+| TH-01 | Nhập Excel | **Đã thêm**: đọc thẳng .xlsx / .csv trong trình duyệt (không thư viện ngoài), tự nhận cột, chỉnh ghép cột, xem trước |
 | TH-03, TH-05 | Sao lưu, xuất Excel | **Mới thêm**: Cài đặt → Sao lưu dữ liệu (JSON đầy đủ, CSV pipeline có BOM cho Excel) |
 | Bài học “ô tiền” | Ô số của trình duyệt đọc sai “10.206” | **Đã sửa**: ô ARR đọc được 10.206 / 10,206 / $10,206 và hiện lại số đã hiểu |
 | Bài học “ngày và múi giờ” | Ngày lùi một ngày ở giờ Việt Nam | Đã đúng: mọi ngày tính theo giờ máy (`isoDate` bù múi giờ) |

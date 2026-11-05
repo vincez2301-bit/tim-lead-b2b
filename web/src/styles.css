@@ -2493,3 +2493,15 @@ table.next-list td {
   display: grid;
   gap: 0.35rem;
 }
+
+/* nhập file: ghép cột */
+.map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.7rem 1rem;
+  margin-top: 0.5rem;
+}
+.map-grid label.missing select {
+  border-color: var(--orange-fg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange-fg) 20%, transparent);
+}
