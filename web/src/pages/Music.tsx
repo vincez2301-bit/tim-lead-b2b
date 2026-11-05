@@ -1,35 +1,54 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Pause, Play } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Briefcase,
+  Camera,
+  Clapperboard,
+  Copy,
+  Film,
+  Gamepad2,
+  Gem,
+  Heart,
+  Laugh,
+  Newspaper,
+  Pause,
+  Plane,
+  Play,
+  Rocket,
+  Sparkles,
+  Trophy,
+  Tv,
+  UtensilsCrossed,
+  type LucideIcon,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg } from "../lib/format";
 import { getPlaylists, type Playlist } from "../lib/pipeline";
+import { gradientFor, mmss, type Theme, type Track } from "../lib/music";
 import { EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
 import { SafeLink } from "../components/SafeLink";
+import { usePlayer } from "../components/Player";
 
-interface Track {
-  id: string;
-  title: string;
-  artist: string;
-  bpm: number;
-  duration_s: number;
-  moods?: string[];
-  genres?: string[];
-  vocals?: boolean;
-  preview: string;
-}
-interface Theme {
-  id: string;
-  title: string;
-  segments: Segment[];
-  description?: string;
-  official?: { title: string; url: string };
-  tracks: Track[];
-}
-
-const PREVIEW_HOST = /^https:\/\/audiocdn\.epidemicsound\.com\//;
+const ICON: Record<string, LucideIcon> = {
+  "bt-news": Newspaper,
+  "bt-sports": Trophy,
+  "bt-doc": Film,
+  "bt-gameshow": Tv,
+  "bt-tet": Sparkles,
+  "mcn-vlog": Camera,
+  "mcn-gaming": Gamepad2,
+  "mcn-food": UtensilsCrossed,
+  "mcn-beauty": Gem,
+  "mcn-comedy": Laugh,
+  "ph-tvc-emotional": Heart,
+  "ph-corporate": Briefcase,
+  "ph-luxury": Gem,
+  "ph-travel": Plane,
+  "film-trailer": Clapperboard,
+  "br-launch": Rocket,
+};
 const KEY = "slf.music.added";
 
 function loadAdded(): Set<string> {
@@ -46,7 +65,6 @@ function saveAdded(s: Set<string>) {
     /* trình duyệt chặn bộ nhớ: bỏ qua */
   }
 }
-const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
 export function MusicPage() {
   const { isAdmin } = useAuth();
@@ -55,34 +73,20 @@ export function MusicPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [segment, setSegment] = useState<Segment | "">("");
+  const [selected, setSelected] = useState<string>("");
   const [added, setAdded] = useState<Set<string>>(loadAdded);
-  const [playing, setPlaying] = useState<string | null>(null);
-  const audio = useRef<HTMLAudioElement | null>(null);
   const saved = useMemo(() => getPlaylists(settings), [settings]);
 
   useEffect(() => {
     fetch("/music-themes.json")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d: Theme[]) => setThemes(Array.isArray(d) ? d : []))
+      .then((d: Theme[]) => {
+        const list = Array.isArray(d) ? d : [];
+        setThemes(list);
+        setSelected((s) => s || list[0]?.id || "");
+      })
       .catch((e) => setError(`Không tải được danh sách nhạc: ${errMsg(e)}`));
-    return () => audio.current?.pause();
   }, []);
-
-  function toggle(t: Track) {
-    if (!PREVIEW_HOST.test(t.preview)) return;
-    if (!audio.current) {
-      audio.current = new Audio();
-      audio.current.addEventListener("ended", () => setPlaying(null));
-    }
-    if (playing === t.id) {
-      audio.current.pause();
-      setPlaying(null);
-      return;
-    }
-    audio.current.src = t.preview;
-    void audio.current.play().catch((e) => setError(`Không phát được: ${errMsg(e)}`));
-    setPlaying(t.id);
-  }
 
   function mark(id: string) {
     setAdded((s) => {
@@ -101,7 +105,6 @@ export function MusicPage() {
     setInfo(msg);
     await reload();
   }
-
   async function upsertPlaylist(p: Playlist) {
     const url = p.url.trim();
     if (!/^https?:\/\//.test(url)) return setError("Link playlist phải bắt đầu bằng https://");
@@ -112,14 +115,27 @@ export function MusicPage() {
 
   const all = themes ?? [];
   const shown = all.filter((t) => !segment || t.segments.includes(segment));
+  const theme = shown.find((t) => t.id === selected) ?? shown[0];
   const total = all.reduce((n, t) => n + t.tracks.length, 0);
   const done = all.reduce((n, t) => n + t.tracks.filter((x) => added.has(x.id)).length, 0);
+
   return (
-    <section>
+    <section className="music">
       <PageHeader
         title="Nhạc mẫu"
-        description="Mỗi chủ đề 10 bài đã lọc sẵn. Mở chủ đề, nghe thử, thêm bài vào playlist trên tài khoản Epidemic Sound của công ty rồi tích “đã thêm”. Xong thì dán link playlist vào chủ đề đó."
-        actions={themes && <span className="badge">{done}/{total} bài đã thêm</span>}
+        description="16 chủ đề × 10 bài lọc sẵn từ Epidemic Sound. Nghe thử, tua đến đoạn muốn nghe, thêm vào playlist trên tài khoản công ty rồi tích “Đã thêm”."
+        actions={
+          themes && (
+            <div className="music-progress">
+              <span>
+                <strong>{done}</strong>/{total} bài đã thêm
+              </span>
+              <span className="bar">
+                <span style={{ width: `${total ? (100 * done) / total : 0}%` }} />
+              </span>
+            </div>
+          )
+        }
       />
       {error && <Notice kind="error">{error}</Notice>}
       {info && <Notice kind="ok">{info}</Notice>}
@@ -137,24 +153,49 @@ export function MusicPage() {
         !error && <Spinner />
       ) : themes.length === 0 ? (
         <div className="card">
-          <EmptyState title="Chưa có danh sách nhạc">Danh sách nhạc theo chủ đề đang được chuẩn bị.</EmptyState>
+          <EmptyState title="Chưa có danh sách nhạc" />
         </div>
       ) : (
-        <div className="themes">
-          {shown.map((t) => (
-            <ThemeRow
-              key={t.id}
-              theme={t}
+        <>
+          <div className="theme-grid">
+            {shown.map((t) => {
+              const Icon = ICON[t.id] ?? Sparkles;
+              const n = t.tracks.filter((x) => added.has(x.id)).length;
+              const hasLink = saved.some((p) => p.title === t.title);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={theme?.id === t.id ? "theme-card active" : "theme-card"}
+                  style={{ background: gradientFor(t.id) }}
+                  onClick={() => setSelected(t.id)}
+                  aria-pressed={theme?.id === t.id}
+                >
+                  <Icon className="theme-icon" aria-hidden="true" />
+                  <span className="theme-name">{t.title}</span>
+                  <span className="theme-meta">
+                    {n}/{t.tracks.length} đã thêm{hasLink ? " · có link" : ""}
+                  </span>
+                  <span className="theme-bar">
+                    <span style={{ width: `${(100 * n) / Math.max(1, t.tracks.length)}%` }} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {theme && (
+            <ThemeDetail
+              key={theme.id}
+              theme={theme}
+              icon={ICON[theme.id] ?? Sparkles}
               added={added}
-              playing={playing}
-              onToggle={toggle}
               onMark={mark}
-              saved={saved.find((p) => p.title === t.title)}
+              saved={saved.find((p) => p.title === theme.title)}
               canSave={isAdmin}
-              onSave={(url) => void upsertPlaylist({ title: t.title, url, segments: t.segments, note: t.description })}
+              onSave={(url) => void upsertPlaylist({ title: theme.title, url, segments: theme.segments, note: theme.description })}
             />
-          ))}
-        </div>
+          )}
+        </>
       )}
       <Library
         saved={saved}
@@ -166,46 +207,66 @@ export function MusicPage() {
   );
 }
 
-function ThemeRow({
+function Equalizer() {
+  return (
+    <span className="eq" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </span>
+  );
+}
+
+function ThemeDetail({
   theme,
+  icon: Icon,
   added,
-  playing,
-  onToggle,
   onMark,
   saved,
   canSave,
   onSave,
 }: {
   theme: Theme;
+  icon: LucideIcon;
   added: Set<string>;
-  playing: string | null;
-  onToggle: (t: Track) => void;
   onMark: (id: string) => void;
   saved?: Playlist;
   canSave: boolean;
   onSave: (url: string) => void;
 }) {
+  const player = usePlayer();
   const [url, setUrl] = useState(saved?.url ?? "");
   const [copied, setCopied] = useState(false);
-  useEffect(() => setUrl(saved?.url ?? ""), [saved?.url]);
   const n = theme.tracks.filter((x) => added.has(x.id)).length;
-  const complete = n === theme.tracks.length;
   const list = theme.tracks.map((x, i) => `${i + 1}. ${x.title} — ${x.artist}`).join("\n");
+  const isCurrent = (t: Track) => player.current?.id === t.id;
+  const themePlaying = theme.tracks.some((t) => isCurrent(t)) && player.playing;
 
   return (
-    <details className={complete ? "theme done" : "theme"}>
-      <summary>
-        <span className="theme-title">{theme.title}</span>
-        <span className="small muted theme-segs">{theme.segments.map((s) => SEGMENT_LABEL[s]).join(" · ")}</span>
-        {saved && <span className="badge badge-green">Đã có link</span>}
-        <span className={complete ? "badge badge-green" : "badge"}>
-          {n}/{theme.tracks.length}
-        </span>
-      </summary>
-      {theme.description && <p className="small muted theme-desc">{theme.description}</p>}
+    <div className="card theme-detail">
+      <div className="theme-hero" style={{ background: gradientFor(theme.id) }}>
+        <Icon className="hero-icon" aria-hidden="true" />
+        <div className="hero-text">
+          <span className="hero-kicker">{theme.segments.map((s) => SEGMENT_LABEL[s]).join(" · ")}</span>
+          <h2>{theme.title}</h2>
+          {theme.description && <p>{theme.description}</p>}
+          <div className="row">
+            <button
+              type="button"
+              className="hero-play"
+              onClick={() => (themePlaying ? player.toggle() : player.playQueue(theme.tracks, 0, theme.title))}
+            >
+              {themePlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />} {themePlaying ? "Tạm dừng" : "Phát cả chủ đề"}
+            </button>
+            <span className="hero-count">
+              {n}/{theme.tracks.length} bài đã thêm
+            </span>
+          </div>
+        </div>
+      </div>
       {theme.official && (
         <p className="small official">
-          Có playlist chính thức: <SafeLink href={theme.official.url}>{theme.official.title}</SafeLink>
+          Có playlist chính thức trên Epidemic Sound: <SafeLink href={theme.official.url}>{theme.official.title}</SafeLink>
           {canSave && (
             <button type="button" className="btn-link small" onClick={() => setUrl(theme.official!.url)}>
               Dùng link này
@@ -213,33 +274,46 @@ function ThemeRow({
           )}
         </p>
       )}
-      <ol className="tracks compact">
-        {theme.tracks.map((x) => (
-          <li key={x.id} className={added.has(x.id) ? "added" : ""}>
-            <button
-              type="button"
-              className="btn-icon play"
-              aria-label={playing === x.id ? `Dừng ${x.title}` : `Nghe thử ${x.title}`}
-              onClick={() => onToggle(x)}
-            >
-              {playing === x.id ? <Pause /> : <Play />}
-            </button>
-            <label className="track-check">
-              <input type="checkbox" checked={added.has(x.id)} onChange={() => onMark(x.id)} />
-              <span>
-                <strong>{x.title}</strong> <span className="muted">— {x.artist}</span>
+      <ol className="track-list">
+        {theme.tracks.map((x, i) => {
+          const cur = isCurrent(x);
+          return (
+            <li key={x.id} className={`${cur ? "current" : ""} ${added.has(x.id) ? "added" : ""}`}>
+              <span className="idx">{cur && player.playing ? <Equalizer /> : i + 1}</span>
+              <button
+                type="button"
+                className="play-btn"
+                aria-label={cur && player.playing ? `Tạm dừng ${x.title}` : `Nghe thử ${x.title}`}
+                onClick={() => player.playQueue(theme.tracks, i, theme.title)}
+              >
+                {cur && player.playing ? <Pause /> : <Play />}
+              </button>
+              <div className="track-main">
+                <strong>{x.title}</strong>
+                <span className="small muted">{x.artist}</span>
+              </div>
+              <div className="mood-chips">
+                {(x.moods ?? []).slice(0, 2).map((m) => (
+                  <span key={m} className="mood">
+                    {m}
+                  </span>
+                ))}
+                {x.vocals && <span className="mood vocal">có lời</span>}
+              </div>
+              <span className="small muted track-meta">
+                {x.bpm} BPM · {mmss(x.duration_s)}
               </span>
-            </label>
-            <span className="small muted track-meta">
-              {x.bpm} BPM · {mmss(x.duration_s)}
-            </span>
-          </li>
-        ))}
+              <label className="added-check" title="Đã thêm vào playlist trên tài khoản công ty">
+                <input type="checkbox" checked={added.has(x.id)} onChange={() => onMark(x.id)} />
+                <span className="small">Đã thêm</span>
+              </label>
+            </li>
+          );
+        })}
       </ol>
-      <div className="row theme-foot">
+      <div className="theme-foot">
         <button
           type="button"
-          className="btn-link small"
           onClick={() =>
             void navigator.clipboard?.writeText(`${theme.title}\n${list}`).then(() => {
               setCopied(true);
@@ -256,18 +330,13 @@ function ThemeRow({
             onSave(url);
           }}
         >
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="Link playlist trên tài khoản công ty"
-            disabled={!canSave}
-          />
-          <button type="submit" disabled={!canSave || !url.trim()}>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link playlist trên tài khoản công ty" disabled={!canSave} />
+          <button type="submit" className="btn-primary" disabled={!canSave || !url.trim()}>
             {saved ? "Cập nhật link" : "Lưu link"}
           </button>
         </form>
       </div>
-    </details>
+    </div>
   );
 }
 
@@ -290,21 +359,15 @@ function Library({
     <details className="card library">
       <summary>
         <strong>Thư viện playlist</strong> <span className="count">{saved.length}</span>
-        <span className="small muted"> — playlist hiện trong khung deal; thêm playlist khác lấy từ trang chủ Epidemic</span>
+        <span className="small muted"> — hiện trong khung deal; thêm playlist chính thức lấy từ trang chủ Epidemic</span>
       </summary>
-      <p className="small muted">
-        Playlist ở đây hiện trong mục “Playlist gợi ý” của khung deal, lọc theo nhóm khách. Ưu tiên playlist chính thức trên trang
-        chủ Epidemic Sound: mở playlist → Chia sẻ → chép link → dán vào đây.
-      </p>
       {saved.length > 0 && (
         <ul className="snippets">
           {saved.map((p) => (
             <li key={p.title} className="row space-between nowrap">
               <span className="small">
                 <SafeLink href={p.url}>{p.title}</SafeLink>{" "}
-                <span className="muted">
-                  · {p.segments?.length ? p.segments.map((x) => SEGMENT_LABEL[x]).join(", ") : "mọi nhóm"}
-                </span>
+                <span className="muted">· {p.segments?.length ? p.segments.map((x) => SEGMENT_LABEL[x]).join(", ") : "mọi nhóm"}</span>
               </span>
               {canEdit && (
                 <button type="button" className="btn-link small" onClick={() => onRemove(p.title)}>

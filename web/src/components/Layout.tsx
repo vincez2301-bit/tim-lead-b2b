@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { DialogHost } from "./dialog";
+import { PlayerProvider } from "./Player";
 import { BigfishMark } from "./BigfishMark";
 
 interface NavItem {
@@ -81,46 +82,72 @@ export function Layout() {
 
   const email = profile?.email ?? session?.user.email ?? "";
   return (
-    <div className="app">
-      <header className="mobilebar">
-        <Brand />
-        <button type="button" className="btn-icon" aria-expanded={open} aria-controls="sidebar" aria-label="Mở menu" onClick={() => setOpen(true)}>
-          <Menu />
-        </button>
-      </header>
-      {open && <div className="scrim" onClick={() => setOpen(false)} aria-hidden="true" />}
-      <aside id="sidebar" className={open ? "sidebar open" : "sidebar"}>
-        <div className="row space-between nowrap">
+    <PlayerProvider>
+      <div className="app">
+        <header className="mobilebar">
           <Brand />
-          {open && (
-            <button type="button" className="btn-icon" aria-label="Đóng menu" onClick={() => setOpen(false)}>
-              <X />
-            </button>
-          )}
-        </div>
-        <nav className="nav" aria-label="Điều hướng chính">
-          <div className="nav-section">Làm việc</div>
-          <Links items={WORK} />
-          <div className="nav-section">Quản trị</div>
-          <Links items={ADMIN} />
-        </nav>
-        <div className="userbox">
-          <span className="avatar" aria-hidden="true">
-            {email.slice(0, 2) || "?"}
-          </span>
-          <div className="who">
-            <strong title={email}>{email}</strong>
-            <span>{isAdmin ? "Quản trị viên" : "Thành viên"}</span>
-          </div>
-          <button type="button" className="btn-icon" title="Đăng xuất" aria-label="Đăng xuất" onClick={() => void signOut()}>
-            <LogOut />
+          <button
+            type="button"
+            className="btn-icon"
+            aria-expanded={open}
+            aria-controls="sidebar"
+            aria-label="Mở menu"
+            onClick={() => setOpen(true)}
+          >
+            <Menu />
           </button>
-        </div>
-      </aside>
-      <main className="content">
-        <Outlet />
-      </main>
-      <DialogHost />
-    </div>
+        </header>
+        {open && (
+          <div
+            className="scrim"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+        <aside id="sidebar" className={open ? "sidebar open" : "sidebar"}>
+          <div className="row space-between nowrap">
+            <Brand />
+            {open && (
+              <button
+                type="button"
+                className="btn-icon"
+                aria-label="Đóng menu"
+                onClick={() => setOpen(false)}
+              >
+                <X />
+              </button>
+            )}
+          </div>
+          <nav className="nav" aria-label="Điều hướng chính">
+            <div className="nav-section">Làm việc</div>
+            <Links items={WORK} />
+            <div className="nav-section">Quản trị</div>
+            <Links items={ADMIN} />
+          </nav>
+          <div className="userbox">
+            <span className="avatar" aria-hidden="true">
+              {email.slice(0, 2) || "?"}
+            </span>
+            <div className="who">
+              <strong title={email}>{email}</strong>
+              <span>{isAdmin ? "Quản trị viên" : "Thành viên"}</span>
+            </div>
+            <button
+              type="button"
+              className="btn-icon"
+              title="Đăng xuất"
+              aria-label="Đăng xuất"
+              onClick={() => void signOut()}
+            >
+              <LogOut />
+            </button>
+          </div>
+        </aside>
+        <main className="content">
+          <Outlet />
+        </main>
+        <DialogHost />
+      </div>
+    </PlayerProvider>
   );
 }

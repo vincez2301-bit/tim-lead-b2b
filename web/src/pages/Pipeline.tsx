@@ -182,6 +182,7 @@ export function PipelinePage() {
               <div
                 key={stage}
                 className={dragOver === stage ? "column over" : "column"}
+                data-stage={stage}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragOver(stage);

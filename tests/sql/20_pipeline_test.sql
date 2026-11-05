@@ -122,6 +122,9 @@ create temp table imp2 as select public.import_leads($json$[
 select pg_temp.ok((select (r->>'deals_updated')::int + (r->>'contacts_added')::int * 10 + (r->>'activities_added')::int * 100 from imp2) = 1,
   'nhập lại không nhân đôi liên hệ / điểm chạm');
 select pg_temp.ok((select stage from public.deal_board where company_name = 'MCN B') = 'outreach', 'nhập lại không lùi giai đoạn');
+select public.import_leads($json$[{"name": "Studio Mới", "domain": "studiomoi.vn", "website_url": "https://studiomoi.vn/"}]$json$);
+select pg_temp.ok((select domain || '|' || website_url from public.companies where name = 'Studio Mới') = 'studiomoi.vn|https://studiomoi.vn/',
+  'nhập bổ sung điền domain + website cho công ty đã có');
 delete from public.deals where company_id = '20000000-0000-0000-0000-000000000001';
 select pg_temp.ok((select count(*) from public.deals where company_id = '20000000-0000-0000-0000-000000000001') = 0,
   'admin xoá deal');
