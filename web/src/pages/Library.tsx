@@ -68,7 +68,7 @@ function SegChips({ value, onChange, allLabel }: { value: Segment | ""; onChange
 // ================================================================== Email & tin nhắn mẫu
 export function EmailLibraryPage() {
   const { isAdmin } = useAuth();
-  const { settings, loading, save } = useSettings();
+  const { settings, loading, save, reload } = useSettings();
   const templates = getTemplates(settings);
   const cadence = getCadence(settings);
   const sender = getSender(settings);
@@ -81,7 +81,7 @@ export function EmailLibraryPage() {
   const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   const sample: Record<string, string> = {
-    ten: "anh Minh",
+    ten: "Minh",
     cong_ty: segment === "mcn" ? "Yeah1 Network" : segment === "brand" ? "Vinamilk" : "HTV9",
     playlist: "https://www.epidemicsound.com/playlists/…",
     nguoi_gui: sender.name || "[Tên bạn]",
@@ -161,6 +161,32 @@ export function EmailLibraryPage() {
         }
       />
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+      {isAdmin && cadence[0]?.channel !== "email" && (
+        <div className="card start-session">
+          <div>
+            <strong>Có bộ email mẫu mới (v3)</strong>
+            <div className="small muted">
+              Bước 1 là email mở lời; email ngắn hơn, mở đầu bằng điều về chính khách hàng, mỗi email chỉ xin một việc dễ trả lời. App
+              chưa tự cập nhật vì bạn đã sửa lịch hoặc mẫu — bấm để thay bằng bộ mới (các mẫu bạn đã sửa sẽ bị thay).
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={async () => {
+              if (!(await confirmDialog({ title: "Thay bằng bộ email mẫu v3?", message: "Lịch 19 bước và toàn bộ nội dung soạn sẵn sẽ được thay.", confirmLabel: "Thay" }))) return;
+              const { error } = await supabase.rpc("apply_sales_defaults_v3");
+              if (error) setMsg({ kind: "error", text: error.message });
+              else {
+                await reload();
+                setMsg({ kind: "ok", text: "Đã dùng bộ email mẫu v3." });
+              }
+            }}
+          >
+            Dùng bộ mới
+          </button>
+        </div>
+      )}
       <div className="card filters-card">
         <SegChips value={segment} onChange={setSegment} allLabel="Mọi nhóm khách" />
         <div className="row space-between">

@@ -540,7 +540,7 @@ function TouchesTab({
         outcome,
         note: a.note,
         contact_id: a.contactId,
-        step: deal.stage === "outreach" && step ? step.step : null,
+        step: (deal.stage === "outreach" || preQualified) && step ? step.step : null,
         happened_at: a.date === todayIso() ? new Date().toISOString() : `${a.date}T09:00:00+07:00`,
       });
       if (ins.error) throw ins.error;
@@ -561,9 +561,13 @@ function TouchesTab({
       } else {
         const nxt = nextStep(cadence, touches);
         p = nxt
-          ? { next_action: nxt.title, next_action_at: dueDateFor(nxt, deal.cadence_started_at) }
+          ? { next_action: nxt.title, next_action_at: dueDateFor(nxt, preQualified ? todayIso() : deal.cadence_started_at) }
           : { next_action: "Đã đủ 19 điểm chạm — chốt hoặc chuyển Nuôi dưỡng", next_action_at: addDays(todayIso(), 2) };
-        msg = `Đã ghi điểm chạm ${touches}/${TOUCH_GOAL}.`;
+        // Lead mới: điểm chạm đầu tiên (thường là email mở lời) bắt đầu lịch tiếp cận.
+        if (preQualified) p = { ...p, stage: "outreach", cadence_started_at: todayIso() };
+        msg = preQualified
+          ? `Đã bắt đầu tiếp cận ${deal.company_name}. Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`
+          : `Đã ghi điểm chạm ${touches}/${TOUCH_GOAL}. Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`;
       }
       const up = await supabase.from("deals").update(p).eq("id", deal.id);
       if (up.error) throw up.error;
@@ -602,7 +606,12 @@ function TouchesTab({
           <span style={{ width: `${pct}%` }} />
         </div>
       </div>
-      {preQualified && <Notice kind="warn">Lead chưa được đánh giá. Nên đánh giá ở tab Đánh giá trước khi liên hệ.</Notice>}
+      {preQualified && (
+        <Notice kind="info">
+          Lead mới — việc đầu tiên là gửi email mở lời bên dưới. Gửi xong bấm “✓ Đã gửi”, app chuyển khách sang Đang tiếp cận và hẹn
+          bước kế tiếp. Đánh giá 8 tiêu chí (tab Đánh giá) không bắt buộc, làm khi đã trao đổi với khách.
+        </Notice>
+      )}
       {step && (
         <div className="next-step">
           <span className="badge badge-blue">Bước {step.step}</span>
@@ -1108,8 +1117,14 @@ function Helpers({
 }
 
 // ------------------------------------------------------------------ Nội dung soạn sẵn cho bước hiện tại
+const VN_SURNAMES = new Set(
+  "nguyen tran le pham hoang huynh phan vu vo dang bui do ho ngo duong ly dinh dao mai truong lam to ha ta cao luong luu chau thai quach kieu tang than chu diep phung tu trieu la doan vuong giang khong ton hua".split(" "),
+);
+/** Tên để xưng hô: “Nguyễn Thị Lan” → “Lan”; tên nước ngoài “John Smith” → “John”. */
 function firstName(full: string | null): string {
-  return (full ?? "").trim();
+  const parts = (full ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return parts[0] ?? "";
+  return VN_SURNAMES.has(foldVi(parts[0])) ? parts[parts.length - 1] : parts[0];
 }
 
 function Compose({
@@ -1136,7 +1151,7 @@ function Compose({
   const contact = contacts.find((c) => c.id === contactId) ?? null;
   const pl = playlists.find((p) => !p.segments?.length || (deal.segment && p.segments.includes(deal.segment)));
   const vars: Record<string, string> = {
-    ten: firstName(contact?.full_name ?? null) || "anh/chị",
+    ten: firstName(contact?.full_name ?? null) || "[tên]",
     cong_ty: deal.company_name,
     playlist: pl ? pl.url : "[link playlist — thêm ở trang Nhạc mẫu]",
     nguoi_gui: sender.name || "[Tên bạn]",

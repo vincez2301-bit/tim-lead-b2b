@@ -570,3 +570,80 @@ export function parseAmount(input: string): number | null {
 export function foldVi(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase();
 }
+
+// ------------------------------------------------------------------ Giai đoạn đơn giản + việc tiếp theo
+/** 5 nhóm dễ hiểu thay cho 10 giai đoạn chi tiết. */
+export type Phase = "start" | "outreach" | "talking" | "won" | "paused";
+export const PHASES: Phase[] = ["start", "outreach", "talking", "won", "paused"];
+export const PHASE_LABEL: Record<Phase, string> = {
+  start: "Chưa liên hệ",
+  outreach: "Đang tiếp cận",
+  talking: "Đang trao đổi",
+  won: "Đã ký",
+  paused: "Tạm dừng",
+};
+export const PHASE_HINT: Record<Phase, string> = {
+  start: "Lead mới. Việc đầu tiên: gửi email mở lời.",
+  outreach: "Đã gửi email, đang theo lịch 19 điểm chạm cho tới khi khách trả lời.",
+  talking: "Khách đã trả lời: hẹn gặp, demo, gửi đề xuất, chốt.",
+  won: "Khách đã ký: chăm sóc và chốt gia hạn.",
+  paused: "Khách từ chối hoặc chưa đúng lúc: liên hệ lại đúng hẹn.",
+};
+export function phaseOf(stage: Stage): Phase {
+  if (stage === "new" || stage === "research") return "start";
+  if (stage === "outreach") return "outreach";
+  if (stage === "won") return "won";
+  if (stage === "lost" || stage === "nurture") return "paused";
+  return "talking";
+}
+
+const STAGE_DEFAULT_ACTION: Partial<Record<Stage, string>> = {
+  connected: "Hẹn buổi tìm hiểu nhu cầu",
+  meeting: "Gặp / demo cho khách",
+  proposal: "Theo dõi đề xuất",
+  commit: "Ký hợp đồng",
+  nurture: "Liên hệ lại",
+};
+
+export interface NextMove {
+  title: string;
+  channel: Channel | null;
+  /** Ngày nên làm; null = chưa lên lịch (lead mới chờ tới lượt, hoặc chưa đặt hạn). */
+  due: string | null;
+  /** Bước trong lịch 19 điểm chạm (nếu có). */
+  step: number | null;
+}
+
+/** Việc tiếp theo của một khách, gộp từ giai đoạn, lịch 19 bước và việc đã đặt. */
+export function nextMove(r: DealRow, cadence: CadenceStep[]): NextMove {
+  if (r.stage === "lost") return { title: "Đã đóng", channel: null, due: null, step: null };
+  if (r.stage === "won") {
+    return r.renewal_at
+      ? { title: `Chốt gia hạn (hết hạn ${fmtDay(r.renewal_at)})`, channel: "call", due: addDays(r.renewal_at, -RENEWAL_WINDOW_DAYS), step: null }
+      : { title: "Chăm sóc khách đã ký", channel: null, due: null, step: null };
+  }
+  const s = nextStep(cadence, r.touches);
+  if (r.stage === "new" || r.stage === "research") {
+    return { title: s?.title ?? "Email mở lời", channel: s?.channel ?? "email", due: r.next_action_at, step: s?.step ?? 1 };
+  }
+  if (r.stage === "outreach") {
+    // Việc đã đặt khác bước trong lịch (đặt tay, hoặc lịch đã đổi) thì không đoán kênh.
+    const matches = !r.next_action || r.next_action === s?.title;
+    return {
+      title: r.next_action ?? s?.title ?? "Chọn việc tiếp theo",
+      channel: matches ? (s?.channel ?? null) : null,
+      due: r.next_action_at,
+      step: matches ? (s?.step ?? null) : null,
+    };
+  }
+  return { title: r.next_action ?? STAGE_DEFAULT_ACTION[r.stage] ?? "Chọn việc tiếp theo", channel: null, due: r.next_action_at, step: null };
+}
+
+/** Thứ tự ưu tiên lead mới: hạng A/B/C → nhóm khách (đài → MCN → …) → điểm. */
+export function leadRank(r: Pick<DealRow, "tier" | "segment" | "score">): number {
+  const tierRank: Record<string, number> = { A: 0, B: 1, C: 2 };
+  return (tierRank[r.tier ?? ""] ?? 3) * 100 - (r.segment ? SEGMENT_PRIORITY[r.segment] : 0) - (r.score ?? 0) / 10;
+}
+
+/** Số lead mới gửi email mở lời mỗi ngày (lưu trên trình duyệt). */
+export const DEFAULT_NEW_PER_DAY = 2;

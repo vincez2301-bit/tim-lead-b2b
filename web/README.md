@@ -28,7 +28,7 @@ Lệnh khác: `npm run typecheck`, `npm run build` (kiểm tra kiểu rồi buil
 
 Menu theo thứ tự công việc:
 
-- **Bán hàng:** Hôm nay (trang chủ: việc đến hạn, lead cần đánh giá, làm lần lượt) · Pipeline (kanban, dự báo).
+- **Bán hàng:** Hôm nay (trang chủ: việc trong ngày gồm điểm chạm đến hạn và lead mới gửi email mở lời, làm lần lượt) · Pipeline (danh sách “việc tiếp theo” của từng khách; bảng kéo thả là tuỳ chọn).
 - **Kho nội dung:** Email & tin nhắn mẫu (theo bước 19 điểm chạm × nhóm khách, chép / sửa tại chỗ) · Xử lý từ chối
   (câu trả lời mẫu + khách đã từ chối chờ liên hệ lại) · Nhạc mẫu (chủ đề, trình phát).
 - **Tìm khách:** Tìm khách mới (form tìm Google → danh sách lượt tìm → bảng công ty của từng lượt: đã phân tích chưa,

@@ -3,40 +3,55 @@ import { Link, useSearchParams } from "react-router";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { SEGMENT_LABEL } from "../lib/format";
-import { rememberFilter, rememberedFilter } from "../lib/settings";
+import { rememberFilter, rememberedFilter, useSettings } from "../lib/settings";
 import {
+  CHANNEL_LABEL,
+  DEFAULT_NEW_PER_DAY,
   LOST_REASON_LABEL,
   OPEN_STAGES,
   RENEWAL_WINDOW_DAYS,
-  SEGMENT_PRIORITY,
   STAGE_LABEL,
   TOUCH_GOAL,
   addDays,
   dueState,
   fmtDay,
   fmtUsd,
+  getCadence,
+  leadRank,
+  nextMove,
   todayIso,
   type DealRow,
 } from "../lib/pipeline";
-import { Badge, EmptyState, Notice, PageHeader, ScorePill, Spinner } from "../components/ui";
+import { EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
 import { DealPanel } from "../components/DealPanel";
 
-const TIER_RANK: Record<string, number> = { A: 0, B: 1, C: 2 };
-const rank = (r: DealRow) =>
-  (TIER_RANK[r.tier ?? ""] ?? 3) * 100 - (r.segment ? SEGMENT_PRIORITY[r.segment] : 0) - (r.score ?? 0) / 10;
+interface Task {
+  row: DealRow;
+  title: string;
+  date: string | null;
+  action: string;
+  extra?: string;
+}
 
 export function TodayPage() {
   const { session } = useAuth();
+  const { settings } = useSettings();
+  const cadence = getCadence(settings);
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState<DealRow[] | null>(null);
+  const [renewals, setRenewals] = useState<DealRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [mine, setMine] = useState(() => rememberedFilter("today.mine") === "1");
   useEffect(() => rememberFilter("today.mine", mine ? "1" : ""), [mine]);
+  const [perDay, setPerDay] = useState(() => {
+    const n = Number(rememberedFilter("today.newPerDay"));
+    return Number.isInteger(n) && n > 0 ? n : DEFAULT_NEW_PER_DAY;
+  });
+  useEffect(() => rememberFilter("today.newPerDay", String(perDay)), [perDay]);
+  const [showAllNew, setShowAllNew] = useState(false);
   const openId = params.get("deal");
   const [queue, setQueue] = useState<string[] | null>(null);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
-  const [qualifyAll, setQualifyAll] = useState(false);
-  const [renewals, setRenewals] = useState<DealRow[]>([]);
   const tab = (params.get("tab") as "qualify" | "touches" | null) ?? undefined;
 
   const load = useCallback(async () => {
@@ -63,14 +78,34 @@ export function TodayPage() {
     [rows, mine, session],
   );
   const t = todayIso();
-  const due = scoped
-    .filter((r) => !["new", "research"].includes(r.stage) && r.next_action_at && r.next_action_at <= t)
-    .sort((a, b) => (a.next_action_at! < b.next_action_at! ? -1 : a.next_action_at! > b.next_action_at! ? 1 : rank(a) - rank(b)));
-  const toQualify = scoped.filter((r) => ["new", "research"].includes(r.stage)).sort((a, b) => rank(a) - rank(b));
+  const isNew = (r: DealRow) => r.stage === "new" || r.stage === "research";
+  const byDate = (a: Task, b: Task) => (a.date ?? "9") < (b.date ?? "9") ? -1 : (a.date ?? "9") > (b.date ?? "9") ? 1 : leadRank(a.row) - leadRank(b.row);
+  const task = (r: DealRow, action = "Làm"): Task => {
+    const m = nextMove(r, cadence);
+    return { row: r, title: m.title, date: m.due, action, extra: m.channel ? CHANNEL_LABEL[m.channel] : undefined };
+  };
+
+  // Điểm chạm đến hạn (khách đã bắt đầu tiếp cận).
+  const due = scoped.filter((r) => !isNew(r) && r.next_action_at && r.next_action_at <= t).map((r) => task(r)).sort(byDate);
+  // Lead mới: mỗi ngày gửi email mở lời cho vài lead ưu tiên nhất.
+  const allNew = scoped.filter(isNew).sort((a, b) => leadRank(a) - leadRank(b));
+  const startedToday = scoped.filter((r) => r.stage === "outreach" && r.cadence_started_at === t).length;
+  const quota = Math.max(0, perDay - startedToday);
+  const todayNew = allNew.slice(0, quota).map((r) => ({ ...task(r, "Gửi email"), date: t }));
+  const waitingNew = allNew.slice(quota);
+  const todayTasks = [...due, ...todayNew];
   const soon = scoped
-    .filter((r) => !["new", "research"].includes(r.stage) && r.next_action_at && r.next_action_at > t && r.next_action_at <= addDays(t, 3))
-    .sort((a, b) => (a.next_action_at! < b.next_action_at! ? -1 : 1));
-  const noPlan = scoped.filter((r) => !["new", "research", "nurture"].includes(r.stage) && !r.next_action_at);
+    .filter((r) => !isNew(r) && r.next_action_at && r.next_action_at > t && r.next_action_at <= addDays(t, 3))
+    .map((r) => task(r, "Mở"))
+    .sort(byDate);
+  const noPlan = scoped.filter((r) => !isNew(r) && OPEN_STAGES.includes(r.stage) && !r.next_action_at).map((r) => task(r, "Đặt lịch"));
+  const renewTasks = renewals.map((r) => ({
+    row: r,
+    title: `Gọi chốt gia hạn${r.est_arr_usd ? ` · ARR ${fmtUsd(r.est_arr_usd)}` : ""}`,
+    date: r.renewal_at,
+    action: "Mở",
+    extra: "hết hạn hợp đồng",
+  }));
 
   const open = (id: string, tabName: "qualify" | "touches") =>
     setParams((p) => {
@@ -92,7 +127,7 @@ export function TodayPage() {
     <section>
       <PageHeader
         title="Hôm nay"
-        description="Việc đến hạn theo lịch 19 điểm chạm, và lead mới cần đánh giá trước khi tiếp cận."
+        description="Những việc nên làm hôm nay. Bấm “Bắt đầu”: app mở lần lượt từng khách với email / Zalo / kịch bản gọi soạn sẵn, gửi xong bấm “Đã gửi” là sang khách kế tiếp."
         actions={
           <label className="checkbox inline">
             <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
@@ -104,101 +139,76 @@ export function TodayPage() {
       {doneMsg && <Notice kind="ok">{doneMsg}</Notice>}
       {!rows ? (
         <Spinner />
+      ) : rows.length === 0 ? (
+        <div className="card start-session">
+          <div>
+            <strong>Pipeline chưa có khách nào</strong>
+            <div className="small muted">Tìm công ty trên Google hoặc nhập file lead có sẵn. Khách mới sẽ hiện ở đây để gửi email mở lời.</div>
+          </div>
+          <div className="row nowrap">
+            <Link className="btn btn-primary" to="/search">
+              Tìm khách mới
+            </Link>
+            <Link className="btn" to="/import">
+              Nhập file
+            </Link>
+          </div>
+        </div>
       ) : (
         <>
-          <div className="grid kpis">
-            <div className="card stat">
-              <span className="stat-label">Đến hạn / quá hạn</span>
-              <span className={due.length ? "stat-value text-danger" : "stat-value"}>{due.length}</span>
+          <div className="card start-session">
+            <div>
+              <strong>
+                {todayTasks.length ? `Hôm nay có ${todayTasks.length} việc` : "Hôm nay đã xong việc"}
+              </strong>
+              <div className="small muted">
+                {due.length} điểm chạm đến hạn · {todayNew.length} lead mới gửi email mở lời
+                {startedToday ? ` (đã gửi ${startedToday} hôm nay)` : ""}
+              </div>
+              <label className="row small per-day">
+                Lead mới mỗi ngày
+                <select className="input-sm" value={perDay} onChange={(e) => setPerDay(Number(e.target.value))}>
+                  {[1, 2, 3, 5, 10].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-            <div className="card stat">
-              <span className="stat-label">Cần đánh giá</span>
-              <span className="stat-value">{toQualify.length}</span>
-            </div>
-            <div className="card stat">
-              <span className="stat-label">3 ngày tới</span>
-              <span className="stat-value">{soon.length}</span>
-            </div>
-            <div className="card stat">
-              <span className="stat-label">Chưa có lịch</span>
-              <span className={noPlan.length ? "stat-value text-warn" : "stat-value"}>{noPlan.length}</span>
-            </div>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!todayTasks.length}
+              onClick={() => {
+                setDoneMsg(null);
+                setQueue(todayTasks.map((x) => x.row.id));
+                open(todayTasks[0].row.id, "touches");
+              }}
+            >
+              Bắt đầu
+            </button>
           </div>
 
-          {rows.length === 0 && (
-            <div className="card start-session">
-              <div>
-                <strong>Pipeline chưa có khách nào</strong>
-                <div className="small muted">
-                  Tìm công ty trên Google hoặc nhập file lead có sẵn, rồi bấm “Đưa vào Pipeline”. Khách mới sẽ hiện ở đây để đánh giá.
-                </div>
-              </div>
-              <div className="row nowrap">
-                <Link className="btn btn-primary" to="/search">
-                  Tìm khách mới
-                </Link>
-                <Link className="btn" to="/import">
-                  Nhập file
-                </Link>
-              </div>
-            </div>
+          <TaskList title="Việc hôm nay" empty="Không còn việc nào hôm nay. Làm tốt lắm!" tasks={todayTasks} onOpen={(id) => open(id, "touches")} />
+          {renewTasks.length > 0 && (
+            <TaskList title={`Sắp gia hạn hợp đồng (${RENEWAL_WINDOW_DAYS} ngày tới)`} empty="" tasks={renewTasks} onOpen={(id) => open(id, "touches")} />
           )}
-          {due.length > 0 && (
-            <div className="card start-session">
-              <div>
-                <strong>Làm lần lượt {due.length} việc đến hạn</strong>
-                <div className="small muted">
-                  App mở từng khách theo thứ tự ưu tiên, có sẵn nội dung email / Zalo / kịch bản gọi. Gửi xong bấm “Đã gửi”, app ghi lại và chuyển
-                  sang khách tiếp theo.
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => {
-                  setDoneMsg(null);
-                  setQueue(due.map((r) => r.id));
-                  open(due[0].id, "touches");
-                }}
-              >
-                Bắt đầu
-              </button>
-            </div>
+          {noPlan.length > 0 && (
+            <TaskList title="Chưa đặt việc tiếp theo" empty="" tasks={noPlan} onOpen={(id) => open(id, "touches")} />
           )}
-          <TaskList
-            title="Điểm chạm đến hạn"
-            empty="Không có việc đến hạn. Làm tốt lắm!"
-            rows={due}
-            action="Ghi điểm chạm"
-            onOpen={(id) => open(id, "touches")}
-          />
-          {renewals.length > 0 && (
+          <TaskList title="3 ngày tới" empty="Chưa có lịch trong 3 ngày tới." tasks={soon} onOpen={(id) => open(id, "touches")} />
+          {waitingNew.length > 0 && (
             <TaskList
-              title={`Sắp gia hạn hợp đồng (${RENEWAL_WINDOW_DAYS} ngày tới)`}
+              title="Lead mới đang chờ tới lượt"
+              hint="Xếp theo hạng A/B/C rồi nhóm khách (đài → MCN → production house → hãng phim → nhãn hàng). Muốn gửi thêm hôm nay thì bấm Gửi email."
               empty=""
-              rows={renewals.map((r) => ({
-                ...r,
-                next_action_at: r.renewal_at,
-                next_action: `Gọi chốt gia hạn${r.est_arr_usd ? ` · ARR ${fmtUsd(r.est_arr_usd)}` : ""} — hỏi mức dùng nhạc, đề xuất gói năm tới`,
-              }))}
-              action="Mở"
+              tasks={(showAllNew ? waitingNew : waitingNew.slice(0, 5)).map((r) => ({ ...task(r, "Gửi email"), date: null }))}
+              more={showAllNew ? 0 : waitingNew.length - 5}
+              onMore={() => setShowAllNew(true)}
               onOpen={(id) => open(id, "touches")}
             />
           )}
-          <TaskList
-            title="Cần đánh giá trước khi tiếp cận"
-            empty="Không còn lead chờ đánh giá."
-            rows={qualifyAll ? toQualify : toQualify.slice(0, 8)}
-            more={qualifyAll ? 0 : toQualify.length - 8}
-            onMore={() => setQualifyAll(true)}
-            action="Đánh giá"
-            onOpen={(id) => open(id, "qualify")}
-            qualify
-          />
-          {noPlan.length > 0 && (
-            <TaskList title="Chưa đặt việc tiếp theo" empty="" rows={noPlan} action="Đặt lịch" onOpen={(id) => open(id, "touches")} />
-          )}
-          <TaskList title="3 ngày tới" empty="Chưa có lịch trong 3 ngày tới." rows={soon} action="Mở" onOpen={(id) => open(id, "touches")} />
         </>
       )}
       {openId && (
@@ -226,7 +236,7 @@ export function TodayPage() {
                     else {
                       setQueue(null);
                       close();
-                      setDoneMsg(`Xong ${queue.length} việc đến hạn hôm nay. Làm tốt lắm!`);
+                      setDoneMsg(`Xong ${queue.length} việc hôm nay. Làm tốt lắm!`);
                     }
                   },
                 }
@@ -240,72 +250,59 @@ export function TodayPage() {
 
 function TaskList({
   title,
+  hint,
   empty,
-  rows,
+  tasks,
   more = 0,
-  action,
-  onOpen,
-  qualify,
   onMore,
+  onOpen,
 }: {
   title: string;
+  hint?: string;
   empty: string;
-  rows: DealRow[];
+  tasks: Task[];
   more?: number;
-  action: string;
-  onOpen: (id: string) => void;
-  qualify?: boolean;
   onMore?: () => void;
+  onOpen: (id: string) => void;
 }) {
   return (
     <div className="card">
-      <div className="row space-between">
-        <h2>
-          {title} <span className="count">{rows.length + Math.max(0, more)}</span>
-        </h2>
-        {qualify && <Link to="/pipeline">Mở bảng pipeline</Link>}
-      </div>
-      {rows.length === 0 ? (
+      <h2>
+        {title} <span className="count">{tasks.length + Math.max(0, more)}</span>
+      </h2>
+      {hint && <p className="small muted">{hint}</p>}
+      {tasks.length === 0 ? (
         <EmptyState title={empty} />
       ) : (
         <ul className="tasks">
-          {rows.map((r) => {
-            const st = dueState(r.next_action_at);
-            return (
-              <li key={r.id}>
-                <button type="button" className="task" onClick={() => onOpen(r.id)}>
-                  <span className={`tier tier-${r.tier ?? "none"}`}>{r.tier ?? "?"}</span>
-                  <span className="task-main">
-                    <strong>{r.company_name}</strong>
-                    <span className="small muted">
-                      {r.segment ? SEGMENT_LABEL[r.segment] : "Chưa phân nhóm"}
-                      {r.city ? ` · ${r.city}` : ""} · {STAGE_LABEL[r.stage]} · {r.touches}/{TOUCH_GOAL} điểm chạm
-                    </span>
-                    {!qualify && r.next_action && <span className="small">{r.next_action}</span>}
-                    {r.stage === "nurture" && r.lost_reason_code && (
-                      <span className="small muted">
-                        Từ chối vì: {LOST_REASON_LABEL[r.lost_reason_code]}
-                        {r.contract_end ? ` · hết HĐ ${fmtDay(r.contract_end)}` : ""}
-                      </span>
-                    )}
+          {tasks.map(({ row: r, title: what, date, action, extra }) => (
+            <li key={r.id}>
+              <button type="button" className="task" onClick={() => onOpen(r.id)}>
+                <span className={`tier tier-${r.tier ?? "none"}`}>{r.tier ?? "?"}</span>
+                <span className="task-main">
+                  <strong>{r.company_name}</strong>
+                  <span className="task-next">
+                    → {what}
+                    {extra ? <span className="small muted"> · {extra}</span> : null}
                   </span>
-                  <span className="task-side">
-                    {qualify ? (
-                      <ScorePill score={r.score} />
-                    ) : (
-                      <span className={`due due-${st} small`}>{fmtDay(r.next_action_at)}</span>
-                    )}
-                    <Badge tone="blue">{action}</Badge>
+                  <span className="small muted">
+                    {r.segment ? SEGMENT_LABEL[r.segment] : "Chưa phân nhóm"}
+                    {r.city ? ` · ${r.city}` : ""} · {STAGE_LABEL[r.stage]} · {r.touches}/{TOUCH_GOAL} điểm chạm
+                    {r.stage === "nurture" && r.lost_reason_code ? ` · từ chối vì ${LOST_REASON_LABEL[r.lost_reason_code].toLowerCase()}` : ""}
                   </span>
-                </button>
-              </li>
-            );
-          })}
+                </span>
+                <span className="task-side">
+                  {date && <span className={`due due-${dueState(date)} small`}>{fmtDay(date)}</span>}
+                  <span className={dueState(date) === "overdue" || dueState(date) === "today" ? "btn btn-primary btn-sm" : "btn btn-sm"}>{action}</span>
+                </span>
+              </button>
+            </li>
+          ))}
         </ul>
       )}
       {more > 0 && (
         <button type="button" className="btn-link small show-more" onClick={onMore}>
-          Hiện thêm {more} lead
+          Hiện thêm {more}
         </button>
       )}
     </div>

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { Columns3, List } from "lucide-react";
 import { useSearchParams } from "react-router";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg } from "../lib/format";
-import { rememberFilter, rememberedFilter } from "../lib/settings";
+import { rememberFilter, rememberedFilter, useSettings } from "../lib/settings";
 import {
   CLOSED_STAGES,
   OPEN_STAGES,
@@ -24,8 +25,18 @@ import {
   todayIso,
   foldVi,
   staleDays,
+  CHANNEL_LABEL,
+  PHASES,
+  PHASE_HINT,
+  PHASE_LABEL,
+  getCadence,
+  leadRank,
+  nextMove,
+  phaseOf,
+  type CadenceStep,
+  type Phase,
 } from "../lib/pipeline";
-import { Badge, EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
+import { Badge, EmptyState, Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { DealPanel } from "../components/DealPanel";
 
 export function PipelinePage() {
@@ -39,6 +50,11 @@ export function PipelinePage() {
   const [segment, setSegment] = useState<Segment | "">("");
   const [tier, setTier] = useState<Tier | "">("");
   const [showClosed, setShowClosed] = useState(false);
+  const [view, setView] = useState<"list" | "board">(() => (rememberedFilter("pipeline.view") === "board" ? "board" : "list"));
+  useEffect(() => rememberFilter("pipeline.view", view === "board" ? "board" : ""), [view]);
+  const [phase, setPhase] = useState<Phase | "">("");
+  const { settings } = useSettings();
+  const cadence = getCadence(settings);
   const [dragOver, setDragOver] = useState<Stage | null>(null);
   const openId = params.get("deal");
 
@@ -105,63 +121,73 @@ export function PipelinePage() {
     <section className="wide">
       <PageHeader
         title="Pipeline"
-        description="Kéo thẻ sang cột khác để đổi giai đoạn. Bấm vào thẻ để đánh giá lead, ghi điểm chạm và cập nhật dự báo."
+        description="Mỗi khách có một việc tiếp theo. Bấm “Làm” để mở nội dung soạn sẵn; làm xong, app tự hẹn bước kế tiếp."
       />
       {error && <Notice kind="error">{error}</Notice>}
-      <div className="grid kpis">
-        <div className="card stat">
-          <span className="stat-label">Commit (khách đã OK)</span>
-          <span className="stat-value">{fmtUsd(fc.commit)}</span>
+      <div className="row space-between view-bar">
+        <div className="seg" role="group" aria-label="Kiểu xem">
+          <button type="button" className={view === "list" ? "on" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>
+            <List aria-hidden="true" /> Việc tiếp theo
+          </button>
+          <button type="button" className={view === "board" ? "on" : ""} aria-pressed={view === "board"} onClick={() => setView("board")}>
+            <Columns3 aria-hidden="true" /> Bảng kéo thả
+          </button>
         </div>
-        <div className="card stat">
-          <span className="stat-label">Forecast (ARR × xác suất)</span>
-          <span className="stat-value">{fmtUsd(fc.weighted)}</span>
-        </div>
-        <div className="card stat">
-          <span className="stat-label">Best case (từ demo trở đi)</span>
-          <span className="stat-value">{fmtUsd(fc.best)}</span>
-        </div>
-        <div className="card stat">
-          <span className="stat-label">Đã ký ({filtered.filter((r) => r.stage === "won").length} khách)</span>
-          <span className="stat-value">{fmtUsd(fc.won)}</span>
-        </div>
-        <div className="card stat">
-          <span className="stat-label">Gia hạn trong {RENEWAL_WINDOW_DAYS} ngày</span>
-          <span className={renewing.length ? "stat-value text-warn" : "stat-value"}>
-            {renewing.length} <span className="small muted">{fmtUsd(renewing.reduce((a, r) => a + (r.est_arr_usd ?? 0), 0))}</span>
+        <div className="row small muted kpi-inline">
+          <span>
+            Quá hạn <strong className={overdue ? "text-danger" : ""}>{overdue}</strong>
           </span>
-        </div>
-        <div className="card stat">
-          <span className="stat-label">Việc quá hạn</span>
-          <span className={overdue ? "stat-value text-danger" : "stat-value"}>{overdue}</span>
+          <span>
+            Đang trao đổi <strong>{filtered.filter((r) => phaseOf(r.stage) === "talking").length}</strong> · dự báo {fmtUsd(fc.weighted)}
+          </span>
+          <span>
+            Đã ký <strong>{filtered.filter((r) => r.stage === "won").length}</strong> · {fmtUsd(fc.won)}
+          </span>
+          <span>
+            Gia hạn {RENEWAL_WINDOW_DAYS} ngày <strong className={renewing.length ? "text-warn" : ""}>{renewing.length}</strong>
+          </span>
         </div>
       </div>
       <div className="card filters">
+        {view === "list" && (
+          <div className="chips phase-chips" role="group" aria-label="Giai đoạn">
+            <button type="button" className={phase === "" ? "chip on" : "chip"} onClick={() => setPhase("")}>
+              Tất cả <span className="chip-count">{filtered.length}</span>
+            </button>
+            {PHASES.map((ph) => (
+              <button key={ph} type="button" className={phase === ph ? "chip on" : "chip"} title={PHASE_HINT[ph]} onClick={() => setPhase(ph)}>
+                {PHASE_LABEL[ph]} <span className="chip-count">{filtered.filter((r) => phaseOf(r.stage) === ph).length}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="form-grid">
           <label>
             Tìm công ty
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tên hoặc domain" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tên hoặc domain (gõ không dấu cũng được)" />
           </label>
-          <label>
-            Người phụ trách
-            <select value={owner} onChange={(e) => setOwner(e.target.value)}>
-              <option value="">Cả nhóm</option>
-              <option value="me">Của tôi</option>
-              <option value="none">Chưa giao</option>
-              {members.map((m) => (
-                <option key={m.user_id} value={m.user_id}>
-                  {m.email}
-                </option>
-              ))}
-            </select>
-          </label>
+          {members.length > 1 && (
+            <label>
+              Người phụ trách
+              <select value={owner} onChange={(e) => setOwner(e.target.value)}>
+                <option value="">Cả nhóm</option>
+                <option value="me">Của tôi</option>
+                <option value="none">Chưa giao</option>
+                {members.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Nhóm khách
             <select value={segment} onChange={(e) => setSegment(e.target.value as Segment | "")}>
               <option value="">Tất cả</option>
-              {SEGMENTS.map((s) => (
-                <option key={s} value={s}>
-                  {SEGMENT_LABEL[s]}
+              {SEGMENTS.map((sg) => (
+                <option key={sg} value={sg}>
+                  {SEGMENT_LABEL[sg]}
                 </option>
               ))}
             </select>
@@ -176,11 +202,14 @@ export function PipelinePage() {
             </select>
           </label>
         </div>
-        <label className="checkbox">
-          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
-          Hiện cột Thắng / Thua / Nuôi dưỡng
-        </label>
+        {view === "board" && (
+          <label className="checkbox">
+            <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+            Hiện cột Thắng / Thua / Nuôi dưỡng
+          </label>
+        )}
       </div>
+      {phase && view === "list" && <p className="small muted phase-hint">{PHASE_HINT[phase]}</p>}
 
       {!rows ? (
         <Spinner />
@@ -190,6 +219,8 @@ export function PipelinePage() {
             Thêm công ty từ trang Công ty (tích chọn → Thêm vào pipeline) hoặc admin nhập file ở mục Nhập dữ liệu.
           </EmptyState>
         </div>
+      ) : view === "list" ? (
+        <NextList rows={filtered.filter((r) => !phase || phaseOf(r.stage) === phase)} cadence={cadence} onOpen={open} />
       ) : (
         <div className="board">
           {columns.map((stage) => {
@@ -285,5 +316,96 @@ function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () 
         <span className="small muted">{r.est_arr_usd ? fmtUsd(r.est_arr_usd) : owner}</span>
       </div>
     </button>
+  );
+}
+
+const PHASE_TONE: Record<Phase, string> = { start: "gray", outreach: "blue", talking: "orange", won: "green", paused: "gray" };
+
+/** Danh sách khách xếp theo việc cần làm: quá hạn / hôm nay → sắp tới → lead mới chờ tới lượt → còn lại. */
+function NextList({ rows, cadence, onOpen }: { rows: DealRow[]; cadence: CadenceStep[]; onOpen: (id: string) => void }) {
+  const t = todayIso();
+  const items = rows
+    .map((r) => ({ r, m: nextMove(r, cadence), ph: phaseOf(r.stage) }))
+    .sort((a, b) => {
+      const order = (x: typeof a) => (x.r.stage === "lost" ? 4 : x.m.due && x.m.due <= t ? 0 : x.m.due ? 1 : x.ph === "start" ? 2 : 3);
+      return order(a) - order(b) || (a.m.due ?? "").localeCompare(b.m.due ?? "") || leadRank(a.r) - leadRank(b.r);
+    });
+  if (!items.length) {
+    return (
+      <div className="card">
+        <EmptyState title="Không có khách nào trong nhóm này." />
+      </div>
+    );
+  }
+  return (
+    <TableWrap>
+      <table className="next-list">
+        <thead>
+          <tr>
+            <th>Khách</th>
+            <th>Giai đoạn</th>
+            <th>Việc tiếp theo</th>
+            <th>Hạn</th>
+            <th aria-label="Hành động"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(({ r, m, ph }) => {
+            const st = dueState(m.due);
+            const urgent = st === "overdue" || st === "today";
+            return (
+              <tr key={r.id} className="clickable" onClick={() => onOpen(r.id)}>
+                <td>
+                  <div className="row nowrap">
+                    <span className={`tier tier-${r.tier ?? "none"}`}>{r.tier ?? "?"}</span>
+                    <div>
+                      <strong>{r.company_name}</strong>
+                      <div className="small muted">
+                        {r.segment ? SEGMENT_LABEL[r.segment] : "Chưa phân nhóm"}
+                        {r.city ? ` · ${r.city}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <Badge tone={PHASE_TONE[ph]}>{PHASE_LABEL[ph]}</Badge>
+                  <div className="small muted">
+                    {r.touches}/{TOUCH_GOAL} điểm chạm
+                  </div>
+                </td>
+                <td>
+                  <strong className="next-title">{m.title}</strong>
+                  <div className="small muted">
+                    {m.channel ? CHANNEL_LABEL[m.channel] : ""}
+                    {m.step ? ` · bước ${m.step}/${TOUCH_GOAL}` : ""}
+                  </div>
+                </td>
+                <td className="small">
+                  {m.due ? (
+                    <span className={`due due-${st}`}>{fmtDay(m.due)}</span>
+                  ) : (
+                    <span className="muted">{ph === "start" ? "Chờ tới lượt" : "—"}</span>
+                  )}
+                </td>
+                <td>
+                  {r.stage !== "lost" && (
+                    <button
+                      type="button"
+                      className={urgent ? "btn-primary btn-sm" : "btn-sm"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpen(r.id);
+                      }}
+                    >
+                      {ph === "start" ? "Gửi email" : "Làm"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </TableWrap>
   );
 }

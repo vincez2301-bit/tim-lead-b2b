@@ -2431,3 +2431,50 @@ input.search {
   margin: 0.35rem 0 0;
   color: var(--orange-fg);
 }
+
+/* ------------------------------------------------------------------ pipeline: việc tiếp theo */
+.view-bar {
+  margin-bottom: 0.75rem;
+}
+.seg button svg {
+  width: 15px;
+  height: 15px;
+}
+.seg button.on {
+  background: var(--accent);
+  color: #fff;
+}
+.kpi-inline {
+  gap: 0.4rem 1.1rem;
+}
+.kpi-inline strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.phase-chips {
+  margin-bottom: 0.85rem;
+}
+.phase-hint {
+  margin: -0.4rem 0 0.75rem;
+}
+table.next-list tr.clickable {
+  cursor: pointer;
+}
+table.next-list td {
+  vertical-align: top;
+}
+.next-title {
+  font-weight: 600;
+}
+.task-next {
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.per-day {
+  margin-top: 0.45rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.per-day select {
+  min-width: 64px;
+}
