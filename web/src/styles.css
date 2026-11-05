@@ -1289,8 +1289,11 @@ ul.plain {
 .column-body {
   padding: 0.6rem;
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 0.5rem;
   overflow-y: auto;
+  min-height: 0;
 }
 .column-empty {
   text-align: center;
@@ -1300,7 +1303,8 @@ ul.plain {
   display: grid;
   gap: 0.35rem;
   width: 100%;
-  min-height: 0;
+  min-height: auto;
+  flex: none;
   padding: 0.7rem 0.75rem;
   text-align: left;
   white-space: normal;

@@ -238,9 +238,10 @@ function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () 
           Hết HĐ {r.competitor ? `với ${r.competitor} ` : ""}: {fmtDay(r.contract_end)}
         </div>
       )}
-      {r.next_action && (
+      {r.next_action && !["new", "research"].includes(r.stage) && (
         <div className={`due due-${due} small`}>
-          {fmtDay(r.next_action_at)} · {r.next_action}
+          {r.next_action_at ? `${fmtDay(r.next_action_at)} · ` : ""}
+          {r.next_action}
         </div>
       )}
       <div className="deal-foot">
