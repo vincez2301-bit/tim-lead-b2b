@@ -8,6 +8,16 @@ import { Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { confirmDialog } from "../components/dialog";
 
 const KEY_INFO: Record<string, { label: string; help: string; shape: "array" | "object" }> = {
+  sender: {
+    label: "Thông tin người gửi",
+    help: 'Dùng cho chữ ký trong nội dung soạn sẵn: {"name":"Tên bạn","title":"Account Manager","company":"Bigfish Agency","phone":"09…"}.',
+    shape: "object",
+  },
+  message_templates: {
+    label: "Nội dung soạn sẵn",
+    help: 'Mỗi mẫu: {"step":2,"channel":"email","segment":"broadcaster|mcn|agency|film|brand|all","title":"…","subject":"…","body":"…"}. Biến: {ten} {cong_ty} {playlist} {nguoi_gui} {cong_ty_ban} {chu_ky}.',
+    shape: "array",
+  },
   playlists: {
     label: "Thư viện playlist",
     help: 'Playlist gợi ý khi gửi Zalo/email: [{"title":"Tin tức – nhịp nhanh","url":"https://…","segments":["broadcaster"],"note":"…"}]. segments: broadcaster, mcn, agency, film, brand (bỏ trống = mọi nhóm).',

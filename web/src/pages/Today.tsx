@@ -31,6 +31,8 @@ export function TodayPage() {
   const [mine, setMine] = useState(() => rememberedFilter("today.mine") === "1");
   useEffect(() => rememberFilter("today.mine", mine ? "1" : ""), [mine]);
   const openId = params.get("deal");
+  const [queue, setQueue] = useState<string[] | null>(null);
+  const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const tab = (params.get("tab") as "qualify" | "touches" | null) ?? undefined;
 
   const load = useCallback(async () => {
@@ -85,6 +87,7 @@ export function TodayPage() {
         }
       />
       {error && <Notice kind="error">{error}</Notice>}
+      {doneMsg && <Notice kind="ok">{doneMsg}</Notice>}
       {!rows ? (
         <Spinner />
       ) : (
@@ -108,6 +111,28 @@ export function TodayPage() {
             </div>
           </div>
 
+          {due.length > 0 && (
+            <div className="card start-session">
+              <div>
+                <strong>Làm lần lượt {due.length} việc đến hạn</strong>
+                <div className="small muted">
+                  App mở từng khách theo thứ tự ưu tiên, có sẵn nội dung email / Zalo / kịch bản gọi. Gửi xong bấm “Đã gửi”, app ghi lại và chuyển
+                  sang khách tiếp theo.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setDoneMsg(null);
+                  setQueue(due.map((r) => r.id));
+                  open(due[0].id, "touches");
+                }}
+              >
+                Bắt đầu
+              </button>
+            </div>
+          )}
           <TaskList
             title="Điểm chạm đến hạn"
             empty="Không có việc đến hạn. Làm tốt lắm!"
@@ -130,7 +155,39 @@ export function TodayPage() {
           <TaskList title="3 ngày tới" empty="Chưa có lịch trong 3 ngày tới." rows={soon} action="Mở" onOpen={(id) => open(id, "touches")} />
         </>
       )}
-      {openId && <DealPanel dealId={openId} initialTab={tab} onClose={close} onChanged={() => void load()} />}
+      {openId && (
+        <DealPanel
+          dealId={openId}
+          initialTab={tab}
+          onClose={() => {
+            setQueue(null);
+            close();
+          }}
+          onChanged={() => void load()}
+          queue={
+            queue && queue.includes(openId)
+              ? {
+                  pos: queue.indexOf(openId) + 1,
+                  total: queue.length,
+                  autoNext: true,
+                  prev: () => {
+                    const i = queue.indexOf(openId);
+                    if (i > 0) open(queue[i - 1], "touches");
+                  },
+                  next: () => {
+                    const i = queue.indexOf(openId);
+                    if (i < queue.length - 1) open(queue[i + 1], "touches");
+                    else {
+                      setQueue(null);
+                      close();
+                      setDoneMsg(`Xong ${queue.length} việc đến hạn hôm nay. Làm tốt lắm!`);
+                    }
+                  },
+                }
+              : undefined
+          }
+        />
+      )}
     </section>
   );
 }

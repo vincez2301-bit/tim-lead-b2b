@@ -383,3 +383,48 @@ export function memberName(members: Member[], id: string | null): string {
   const e = members.find((x) => x.user_id === id)?.email;
   return e ? e.split("@")[0] : "—";
 }
+
+// ------------------------------------------------------------------ Nội dung soạn sẵn
+export interface MessageTemplate {
+  step: number;
+  channel: Channel;
+  segment: Segment | "all";
+  title: string;
+  subject?: string;
+  body: string;
+}
+export interface Sender {
+  name: string;
+  title: string;
+  company: string;
+  phone: string;
+}
+
+export function getTemplates(s: SettingsMap): MessageTemplate[] {
+  const v = s["message_templates"];
+  return Array.isArray(v) ? (v as MessageTemplate[]).filter((x) => x && typeof x.step === "number" && x.body) : [];
+}
+export function getSender(s: SettingsMap): Sender {
+  const v = (s["sender"] ?? {}) as Partial<Sender>;
+  return { name: v.name ?? "", title: v.title ?? "", company: v.company ?? "Bigfish Agency", phone: v.phone ?? "" };
+}
+
+/** Mẫu cho một bước: ưu tiên đúng nhóm khách, hãng phim dùng mẫu production house, sau đó mẫu chung. */
+export function pickTemplate(list: MessageTemplate[], step: number, segment: Segment | null): MessageTemplate | null {
+  const forStep = list.filter((t) => t.step === step);
+  return (
+    forStep.find((t) => t.segment === segment) ??
+    (segment === "film" ? forStep.find((t) => t.segment === "agency") : undefined) ??
+    forStep.find((t) => t.segment === "all") ??
+    forStep[0] ??
+    null
+  );
+}
+
+export function signature(sd: Sender): string {
+  return [sd.name || "[Tên bạn]", [sd.title, sd.company].filter(Boolean).join(" – "), sd.phone].filter(Boolean).join("\n");
+}
+
+export function renderTemplate(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{([a-z_]+)\}/g, (m, k: string) => (k in vars ? vars[k] : m));
+}

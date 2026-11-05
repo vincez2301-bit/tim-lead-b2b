@@ -14,6 +14,13 @@ import {
   getBudgetMonth,
   getPlaybook,
   getPlaylists,
+  getSender,
+  getTemplates,
+  pickTemplate,
+  renderTemplate,
+  signature,
+  type MessageTemplate,
+  type Sender,
   reengageDate,
   type LostReason,
   type Objection,
@@ -64,16 +71,26 @@ interface ContactRow {
 
 type Tab = "qualify" | "touches" | "info";
 
+export interface DealQueue {
+  pos: number;
+  total: number;
+  next: () => void;
+  prev: () => void;
+  autoNext: boolean;
+}
+
 export function DealPanel({
   dealId,
   initialTab,
   onClose,
   onChanged,
+  queue,
 }: {
   dealId: string;
   initialTab?: Tab;
   onClose: () => void;
   onChanged: () => void;
+  queue?: DealQueue;
 }) {
   const { session } = useAuth();
   const { settings } = useSettings();
@@ -83,6 +100,8 @@ export function DealPanel({
   const playbook = useMemo(() => getPlaybook(settings), [settings]);
   const playlists = useMemo(() => getPlaylists(settings), [settings]);
   const budgetMonth = getBudgetMonth(settings);
+  const templates = useMemo(() => getTemplates(settings), [settings]);
+  const sender = useMemo(() => getSender(settings), [settings]);
   const [rejecting, setRejecting] = useState(false);
 
   const [deal, setDeal] = useState<DealRow | null>(null);
@@ -140,6 +159,22 @@ export function DealPanel({
         ) : (
           <>
             <header className="drawer-head">
+              {queue && (
+                <div className="queue-bar">
+                  <strong>
+                    Việc {queue.pos}/{queue.total}
+                  </strong>
+                  <span className="small">Gửi xong bấm “Đã gửi” — app tự chuyển sang việc tiếp theo.</span>
+                  <span className="row">
+                    <button type="button" className="btn-link small" disabled={queue.pos <= 1} onClick={queue.prev}>
+                      ← Trước
+                    </button>
+                    <button type="button" className="btn-link small" disabled={queue.pos >= queue.total} onClick={queue.next}>
+                      Bỏ qua →
+                    </button>
+                  </span>
+                </div>
+              )}
               <div className="row space-between nowrap">
                 <div className="drawer-title">
                   <h2>{deal.company_name}</h2>
@@ -258,6 +293,9 @@ export function DealPanel({
                   playbook={playbook}
                   playlists={playlists}
                   budgetMonth={budgetMonth}
+                  templates={templates}
+                  sender={sender}
+                  onLogged={queue?.autoNext ? queue.next : undefined}
                   userId={session?.user.id ?? null}
                   reload={async () => {
                     await load();
@@ -439,10 +477,13 @@ function TouchesTab({
   playbook,
   playlists,
   budgetMonth,
+  templates,
+  sender,
   userId,
   reload,
   setError,
   setInfo,
+  onLogged,
 }: {
   deal: DealRow;
   acts: Activity[];
@@ -452,10 +493,13 @@ function TouchesTab({
   playbook: Objection[];
   playlists: Playlist[];
   budgetMonth: number;
+  templates: MessageTemplate[];
+  sender: Sender;
   userId: string | null;
   reload: () => Promise<void>;
   setError: (s: string | null) => void;
   setInfo: (s: string | null) => void;
+  onLogged?: () => void;
 }) {
   const step = nextStep(cadence, acts.length);
   const [channel, setChannel] = useState<Channel>(step?.channel ?? "email");
@@ -467,22 +511,32 @@ function TouchesTab({
   useEffect(() => setChannel(step?.channel ?? "email"), [step?.channel]);
 
   const preQualified = deal.stage === "new" || deal.stage === "research";
+  // Khách đang nuôi dưỡng dùng mẫu “điểm chạm nuôi dưỡng” (bước 90) thay cho lịch tiếp cận.
+  const composeStep =
+    deal.stage === "nurture"
+      ? { step: 90, channel: "email" as Channel, title: "Điểm chạm nuôi dưỡng" }
+      : step;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    await log({ channel, outcome, note: note.trim() || null, contactId: contactId || null, date });
+  }
+
+  async function log(a: { channel: Channel; outcome: Outcome; note: string | null; contactId: string | null; date: string }) {
     if (!userId) return;
     setBusy(true);
     setError(null);
+    const outcome = a.outcome;
     try {
       const ins = await supabase.from("activities").insert({
         deal_id: deal.id,
         user_id: userId,
-        channel,
+        channel: a.channel,
         outcome,
-        note: note.trim() || null,
-        contact_id: contactId || null,
+        note: a.note,
+        contact_id: a.contactId,
         step: deal.stage === "outreach" && step ? step.step : null,
-        happened_at: date === todayIso() ? new Date().toISOString() : `${date}T09:00:00+07:00`,
+        happened_at: a.date === todayIso() ? new Date().toISOString() : `${a.date}T09:00:00+07:00`,
       });
       if (ins.error) throw ins.error;
       // Lên lịch việc tiếp theo.
@@ -512,6 +566,7 @@ function TouchesTab({
       setOutcome("done");
       setInfo(msg);
       await reload();
+      onLogged?.();
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -551,6 +606,19 @@ function TouchesTab({
             {step.hint && <div className="small muted">{step.hint}</div>}
           </div>
         </div>
+      )}
+      {composeStep && (
+        <Compose
+          key={`${deal.id}-${composeStep.step}`}
+          deal={deal}
+          step={composeStep}
+          template={pickTemplate(templates, composeStep.step, deal.segment)}
+          sender={sender}
+          contacts={contacts}
+          playlists={playlists}
+          busy={busy}
+          onSent={(ch, oc, n, cid) => void log({ channel: ch, outcome: oc, note: n, contactId: cid, date: todayIso() })}
+        />
       )}
       <Helpers
         segment={deal.segment}
@@ -1015,6 +1083,138 @@ function Helpers({
           ))}
         </details>
       )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Nội dung soạn sẵn cho bước hiện tại
+function firstName(full: string | null): string {
+  return (full ?? "").trim();
+}
+
+function Compose({
+  deal,
+  step,
+  template,
+  sender,
+  contacts,
+  playlists,
+  busy,
+  onSent,
+}: {
+  deal: DealRow;
+  step: { step: number; channel: Channel; title: string };
+  template: MessageTemplate | null;
+  sender: Sender;
+  contacts: ContactRow[];
+  playlists: Playlist[];
+  busy: boolean;
+  onSent: (channel: Channel, outcome: Outcome, note: string, contactId: string | null) => void;
+}) {
+  const withEmail = contacts.filter((c) => c.email);
+  const [contactId, setContactId] = useState((withEmail[0] ?? contacts[0])?.id ?? "");
+  const contact = contacts.find((c) => c.id === contactId) ?? null;
+  const pl = playlists.find((p) => !p.segments?.length || (deal.segment && p.segments.includes(deal.segment)));
+  const vars: Record<string, string> = {
+    ten: firstName(contact?.full_name ?? null) || "anh/chị",
+    cong_ty: deal.company_name,
+    playlist: pl ? pl.url : "[link playlist — thêm ở trang Nhạc mẫu]",
+    nguoi_gui: sender.name || "[Tên bạn]",
+    chuc_danh: sender.title,
+    cong_ty_ban: sender.company || "Bigfish Agency",
+    sdt: sender.phone,
+    chu_ky: signature(sender),
+  };
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    setSubject(template?.subject ? renderTemplate(template.subject, vars) : "");
+    setBody(template ? renderTemplate(template.body, vars) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, contactId, pl?.url, sender.name]);
+
+  if (!template) {
+    return (
+      <p className="small muted">
+        Chưa có nội dung soạn sẵn cho bước {step.step}. Thêm ở Cài đặt → Nội dung soạn sẵn.
+      </p>
+    );
+  }
+  const ch = template.channel;
+  const mailto =
+    ch === "email" && contact?.email
+      ? `mailto:${encodeURIComponent(contact.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+      : null;
+  const tel = contact?.phone ? `tel:${contact.phone.replace(/[^0-9+]/g, "")}` : null;
+  const note = `${CHANNEL_LABEL[ch]} — ${template.title}${contact ? ` (gửi ${contact.full_name ?? contact.email})` : ""}`;
+
+  return (
+    <div className="compose">
+      <div className="row space-between">
+        <strong>Nội dung soạn sẵn · {template.title}</strong>
+        {contacts.length > 0 && (
+          <select className="input-sm" value={contactId} onChange={(e) => setContactId(e.target.value)} aria-label="Người nhận">
+            {contacts.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.full_name ?? c.email}
+                {c.email ? "" : " (chưa có email)"}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {contacts.length === 0 && (
+        <Notice kind="warn">Chưa có người liên hệ — thêm ở tab “Thông tin & liên hệ” hoặc chạy pipeline dữ liệu để app tự tìm từ website.</Notice>
+      )}
+      {ch === "email" && (
+        <label>
+          Tiêu đề
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} />
+        </label>
+      )}
+      <label>
+        {ch === "call" ? "Kịch bản" : "Nội dung"}
+        <textarea rows={ch === "email" ? 10 : 5} value={body} onChange={(e) => setBody(e.target.value)} />
+      </label>
+      {body.includes("[") && <p className="small muted">Điền các chỗ trong ngoặc vuông [ … ] trước khi gửi.</p>}
+      <div className="row">
+        {mailto && (
+          <a className="btn btn-primary" href={mailto}>
+            Mở email
+          </a>
+        )}
+        {ch === "call" && tel && (
+          <a className="btn btn-primary" href={tel}>
+            Gọi {contact?.phone}
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={() =>
+            void navigator.clipboard?.writeText(ch === "email" ? `${subject}\n\n${body}` : body).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            })
+          }
+        >
+          <Copy aria-hidden="true" /> {copied ? "Đã chép" : ch === "zalo" ? "Chép tin Zalo" : "Chép nội dung"}
+        </button>
+        {ch === "call" ? (
+          <>
+            <button type="button" className="btn-primary" disabled={busy} onClick={() => onSent(ch, "no_answer", `${note}: không nghe máy`, contactId || null)}>
+              Đã gọi — không nghe
+            </button>
+            <button type="button" disabled={busy} onClick={() => onSent(ch, "replied", `${note}: đã nói chuyện`, contactId || null)}>
+              Đã nói chuyện
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn-primary" disabled={busy} onClick={() => onSent(ch, "done", note, contactId || null)}>
+            ✓ Đã gửi
+          </button>
+        )}
+      </div>
     </div>
   );
 }
