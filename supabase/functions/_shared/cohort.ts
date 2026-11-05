@@ -2,7 +2,7 @@
 import { badRequest } from "./http.ts";
 import type { CohortFilter, CohortRange, CompanyStatus, Segment } from "./types.ts";
 
-const SEGMENTS: Segment[] = ["agency", "brand", "film", "mcn"];
+const SEGMENTS: Segment[] = ["broadcaster", "mcn", "agency", "film", "brand"];
 const STATUSES: CompanyStatus[] = ["new", "profiled", "enriched", "unreachable", "archived"];
 
 function codeList(v: unknown, field: string, codes: Set<string>): string[] {

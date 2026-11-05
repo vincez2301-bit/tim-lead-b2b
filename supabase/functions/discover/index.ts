@@ -17,7 +17,7 @@ serve(async (req, body) => {
   const { limits } = settings;
 
   // ---- kiểm tra input
-  const segment = oneOf<Segment>(body.segment, ["agency", "brand", "film", "mcn"], undefined, "segment");
+  const segment = oneOf<Segment>(body.segment, ["broadcaster", "mcn", "agency", "film", "brand"], undefined, "segment");
   if (!Array.isArray(body.keywords)) throw badRequest("keywords phải là mảng");
   const keywords = [...new Set(
     (body.keywords as unknown[]).filter((k): k is string => typeof k === "string").map((k) => k.trim()).filter(Boolean),

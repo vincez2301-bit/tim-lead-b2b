@@ -9,7 +9,7 @@
 // - Các function xử lý theo lô trả về remaining_ids: những id CHƯA xử lý (hết thời gian
 //   của lần gọi). Frontend gửi lại remaining_ids cho tới khi rỗng.
 
-export type Segment = "agency" | "brand" | "film" | "mcn";
+export type Segment = "broadcaster" | "mcn" | "agency" | "film" | "brand";
 export type DiscoverMode = "search" | "maps" | "both";
 export type CompanyStatus = "new" | "profiled" | "enriched" | "unreachable" | "archived";
 export type RunStatus = "running" | "done" | "failed" | "partial";

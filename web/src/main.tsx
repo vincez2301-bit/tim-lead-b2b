@@ -16,7 +16,7 @@ if (configError) {
   root.render(
     <StrictMode>
       <main className="content">
-        <h1>Sync Lead Finder</h1>
+        <h1>Bigfish Lead Finder</h1>
         <div className="notice notice-error">{configError}</div>
       </main>
     </StrictMode>,

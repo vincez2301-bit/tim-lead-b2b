@@ -1,4 +1,4 @@
-# Sync Lead Finder — ghi chú cho Claude
+# Bigfish Lead Finder — ghi chú cho Claude
 
 Tổng quan, cấu trúc, triển khai: `README.md`. Frontend: `web/README.md`. Cách làm việc tiết kiệm: `docs/lam-viec-voi-claude.md`.
 

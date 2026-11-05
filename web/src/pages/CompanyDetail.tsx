@@ -21,6 +21,22 @@ export function CompanyDetailPage() {
   const [busy, setBusy] = useState<Action | null>(null);
   const [actionMsg, setActionMsg] = useState<{ kind: "ok" | "error" | "warn"; text: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [dealId, setDealId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!id) return;
+    void supabase
+      .from("deals")
+      .select("id")
+      .eq("company_id", id)
+      .maybeSingle()
+      .then(({ data }) => setDealId((data as { id: string } | null)?.id ?? null));
+  }, [id]);
+  async function addDeal() {
+    if (!id) return;
+    const { data, error } = await supabase.from("deals").insert({ company_id: id, stage: "new" }).select("id").single();
+    if (error) setActionMsg({ kind: "error", text: error.message });
+    else setDealId((data as { id: string }).id);
+  }
 
   const load = useCallback(async () => {
     const [c, o, ct, s] = await Promise.all([
@@ -108,6 +124,15 @@ export function CompanyDetailPage() {
           <span className="row">
             <span className="muted small">Điểm</span>
             <ScorePill score={company.score} />
+            {dealId ? (
+              <Link className="btn" to={`/pipeline?deal=${dealId}`}>
+                Mở trong pipeline
+              </Link>
+            ) : dealId === null && !company.is_dnc ? (
+              <button type="button" className="btn-primary" onClick={() => void addDeal()}>
+                Thêm vào pipeline
+              </button>
+            ) : null}
           </span>
         }
       />

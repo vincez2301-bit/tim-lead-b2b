@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { supabase } from "../lib/supabase";
 import { callFn } from "../lib/api";
-import type { EstimateResponse, Segment } from "../lib/api-types";
+import type { EstimateResponse } from "../lib/api-types";
 import type { CompanyStat, Run } from "../lib/db-types";
-import { SEGMENT_LABEL, STATUSES, STATUS_LABEL, STEP_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
+import { SEGMENTS, SEGMENT_LABEL, STATUSES, STATUS_LABEL, STEP_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { Check, Search } from "lucide-react";
 import { EmptyState, Notice, PageHeader, RunStatusBadge, Spinner, TableWrap } from "../components/ui";
 import { QuotaCard } from "../components/QuotaCard";
@@ -148,7 +148,7 @@ export function OverviewPage() {
           <TableWrap>
             <table>
               <tbody>
-                {(["agency", "brand", "film", "mcn"] as Segment[]).map((s) => (
+                {SEGMENTS.map((s) => (
                   <tr key={s}>
                     <td>{SEGMENT_LABEL[s]}</td>
                     <td className="num">{fmtNum(agg.bySegment.get(s) ?? 0)}</td>

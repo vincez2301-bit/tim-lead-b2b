@@ -1,12 +1,14 @@
 import type { CompanyStatus, EmailLabel, RunStatus, Segment } from "./api-types";
 import type { DncReason, SignalStatus, Step } from "./db-types";
 
-export const SEGMENTS: Segment[] = ["agency", "brand", "film", "mcn"];
+/** Theo thứ tự ưu tiên của nhóm: broadcaster → MCN → production house → hãng phim → brand. */
+export const SEGMENTS: Segment[] = ["broadcaster", "mcn", "agency", "film", "brand"];
 export const SEGMENT_LABEL: Record<Segment, string> = {
-  agency: "Agency / production house",
-  brand: "Nhãn hàng",
-  film: "Hãng phim / hậu kỳ",
+  broadcaster: "Đài truyền hình",
   mcn: "MCN / mạng creator",
+  agency: "Production house / agency",
+  film: "Hãng phim / hậu kỳ",
+  brand: "Nhãn hàng",
 };
 
 export const STATUSES: CompanyStatus[] = ["new", "profiled", "enriched", "unreachable", "archived"];

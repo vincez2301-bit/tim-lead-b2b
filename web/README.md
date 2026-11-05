@@ -1,4 +1,4 @@
-# Sync Lead Finder — Frontend
+# Bigfish Lead Finder — Frontend
 
 React 18 + Vite 6 + TypeScript, giao diện tiếng Việt, responsive (điện thoại và máy tính).
 Frontend chỉ đọc dữ liệu qua RLS bằng khoá **anon/publishable**; mọi thao tác pipeline đi qua

@@ -13,7 +13,8 @@ import { type Cell, toCsv } from "../_shared/csv.ts";
 import { toXlsx } from "../_shared/xlsx.ts";
 
 const SEGMENT_VI: Record<string, string> = {
-  agency: "Agency / production",
+  broadcaster: "Đài truyền hình",
+  agency: "Production house / agency",
   brand: "Nhãn hàng",
   film: "Hãng phim / hậu kỳ",
   mcn: "MCN",

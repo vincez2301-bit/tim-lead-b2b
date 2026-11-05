@@ -3,6 +3,9 @@ import { NavLink, Outlet, useLocation } from "react-router";
 import {
   Ban,
   Building2,
+  CalendarCheck,
+  Kanban,
+  Upload,
   LayoutDashboard,
   ListFilter,
   LogOut,
@@ -26,11 +29,14 @@ interface NavItem {
 
 const WORK: NavItem[] = [
   { to: "/", label: "Tổng quan", icon: LayoutDashboard, end: true },
+  { to: "/today", label: "Việc hôm nay", icon: CalendarCheck },
+  { to: "/pipeline", label: "Pipeline", icon: Kanban },
   { to: "/search", label: "Tìm kiếm", icon: Search },
   { to: "/companies", label: "Công ty", icon: Building2 },
   { to: "/cohort", label: "Cohort & xuất file", icon: ListFilter },
 ];
 const ADMIN: NavItem[] = [
+  { to: "/import", label: "Nhập dữ liệu", icon: Upload },
   { to: "/signals", label: "Tín hiệu", icon: Radar },
   { to: "/dnc", label: "Loại trừ", icon: Ban },
   { to: "/settings", label: "Cài đặt", icon: Settings },
@@ -41,10 +47,10 @@ function Brand() {
   return (
     <div className="brand">
       <span className="brand-mark" aria-hidden="true">
-        S
+        bf
       </span>
       <span>
-        Sync Lead Finder
+        Bigfish Lead Finder
         <small>Tìm khách hàng B2B</small>
       </span>
     </div>

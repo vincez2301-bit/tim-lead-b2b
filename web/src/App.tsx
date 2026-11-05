@@ -12,6 +12,9 @@ import { CohortPage } from "./pages/Cohort";
 import { DncPage } from "./pages/Dnc";
 import { SettingsPage } from "./pages/Settings";
 import { LogsPage } from "./pages/Logs";
+import { TodayPage } from "./pages/Today";
+import { PipelinePage } from "./pages/Pipeline";
+import { ImportPage } from "./pages/Import";
 
 function Guard() {
   const { loading, session, needsMfa } = useAuth();
@@ -31,6 +34,9 @@ export function App() {
       />
       <Route element={<Guard />}>
         <Route index element={<OverviewPage />} />
+        <Route path="today" element={<TodayPage />} />
+        <Route path="pipeline" element={<PipelinePage />} />
+        <Route path="import" element={<ImportPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="signals" element={<SignalsPage />} />
         <Route path="companies" element={<CompaniesPage />} />

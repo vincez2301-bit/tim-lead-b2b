@@ -7,7 +7,7 @@ import type { SignalCode } from "../lib/db-types";
 import { SEGMENTS, SEGMENT_LABEL, STATUSES, STATUS_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { useDebounced } from "../lib/hooks";
 import { allCityNames, getBatchSize, rememberFilter, rememberedFilter, useSettings } from "../lib/settings";
-import { Play, X } from "lucide-react";
+import { Kanban, Play, X } from "lucide-react";
 import { Badge, EmptyState, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
 import { PipelineRunner } from "../components/PipelineRunner";
@@ -53,6 +53,24 @@ export function CompaniesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showRunner, setShowRunner] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  async function addToPipeline() {
+    const ids = [...selected];
+    const { data, error } = await supabase
+      .from("deals")
+      .upsert(ids.map((company_id) => ({ company_id, stage: "new" })), { onConflict: "company_id", ignoreDuplicates: true })
+      .select("id");
+    if (error) setNotice({ kind: "error", text: error.message });
+    else {
+      const added = data?.length ?? 0;
+      setNotice({
+        kind: "ok",
+        text: `Đã thêm ${added} công ty vào pipeline (giai đoạn Lead mới)${ids.length > added ? `, ${ids.length - added} công ty đã có sẵn` : ""}. Đánh giá chúng ở Việc hôm nay.`,
+      });
+      setSelected(new Set());
+    }
+  }
 
   useEffect(() => {
     supabase
@@ -222,7 +240,7 @@ export function CompaniesPage() {
       </div>
 
       {error && <Notice kind="error">{error}</Notice>}
-
+      {notice && <Notice kind={notice.kind}>{notice.text}</Notice>}
       <div className="toolbar">
         <span className="muted">
           <strong className="stat-inline">{fmtNum(total)}</strong> công ty{city ? ` · ${city}` : ""}
@@ -314,7 +332,10 @@ export function CompaniesPage() {
               requestAnimationFrame(() => document.getElementById("runner")?.scrollIntoView({ behavior: "smooth" }));
             }}
           >
-            <Play aria-hidden="true" /> Chạy pipeline
+            <Play aria-hidden="true" /> Chạy pipeline dữ liệu
+          </button>
+          <button type="button" onClick={() => void addToPipeline()}>
+            <Kanban aria-hidden="true" /> Thêm vào pipeline bán hàng
           </button>
           <button type="button" className="btn-link" onClick={() => setSelected(new Set())}>
             <X aria-hidden="true" /> Bỏ chọn

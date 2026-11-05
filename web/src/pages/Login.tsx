@@ -52,10 +52,10 @@ export function LoginPage() {
       <form className="card login-card" onSubmit={(e) => void submit(e)}>
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
-            S
+            bf
           </span>
           <span>
-            Sync Lead Finder
+            Bigfish Lead Finder
             <small>Tìm khách hàng B2B</small>
           </span>
         </div>

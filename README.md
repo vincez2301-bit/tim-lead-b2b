@@ -1,4 +1,4 @@
-# Sync Lead Finder
+# Bigfish Lead Finder
 
 Web app giúp Licensing Manager **tìm và lọc lead B2B cần giấy phép nhạc (sync license)** tại Việt Nam: agency/production house, nhãn hàng làm nhiều video, hãng phim/hậu kỳ và MCN nhỏ.
 
@@ -7,6 +7,19 @@ Pipeline: **discover** (Serper) → **profile** (đọc website bằng regex) �
 Mỗi phát hiện là một dòng trong bảng `observations`, kèm `evidence_url` và `confidence`. Admin duyệt tín hiệu nào được thu thập; cohort là truy vấn SQL tham số hoá. Ý tưởng lấy từ [Harvey](https://github.com/ethanplusai/harvey) (MIT).
 
 > ⚠️ Dữ liệu liên hệ cá nhân có thể thuộc phạm vi NĐ 13/2023, Luật BVDLCN, NĐ 91/2020 và GDPR. **Cần pháp chế và IT Security phê duyệt trước khi dùng thật.**
+
+## Pipeline bán hàng
+
+Dùng chung cho cả nhóm (ai cũng xem và cập nhật được deal của nhau; chỉ admin xoá deal, nhập file).
+
+- **Giai đoạn:** Lead mới → Đánh giá → Đang tiếp cận → Đã phản hồi → Gặp / demo → Đề xuất → Chờ ký → Thắng / Thua / Nuôi dưỡng.
+- **Đánh giá trước khi tiếp cận:** 8 tiêu chí (`settings.qualification_criteria`) + nhóm khách + điểm tín hiệu → gợi ý hạng A/B/C.
+  Ưu tiên nhóm khách: đài truyền hình → MCN → production house → hãng phim → nhãn hàng.
+- **19 điểm chạm** (`settings.cadence`): chặng A 12 bước tiếp cận đa kênh (email, gọi, Zalo, LinkedIn), chặng B 7 bước chuyển đổi.
+  Ghi một điểm chạm thì app tự đặt việc kế tiếp; khách trả lời thì chuyển sang "Đã phản hồi".
+- **Màn hình:** Việc hôm nay (việc đến hạn + lead cần đánh giá), Pipeline (bảng kéo thả + dự báo Commit / Forecast / Best case),
+  Nhập dữ liệu (JSON hoặc CSV; chạy lại cùng file không nhân đôi). Bảng: `deals`, `activities`, view `deal_board`.
+- File lead có dữ liệu cá nhân: **không commit vào repo** (repo công khai).
 
 ## Cấu trúc
 
