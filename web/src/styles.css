@@ -1280,6 +1280,9 @@ img.qr {
 .deal-card:active {
   cursor: grabbing;
 }
+.deal-card .badge {
+  justify-self: start;
+}
 .deal-name {
   font-weight: 600;
   font-size: 0.88rem;

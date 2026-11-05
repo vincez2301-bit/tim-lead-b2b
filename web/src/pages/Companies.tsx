@@ -11,7 +11,7 @@ import { Kanban, Play, X } from "lucide-react";
 import { Badge, EmptyState, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
 import { PipelineRunner } from "../components/PipelineRunner";
-import { addToSalesPipeline } from "../lib/pipeline";
+import { addToSalesPipeline, foldVi } from "../lib/pipeline";
 
 const PAGE_SIZE = 50;
 
@@ -119,7 +119,7 @@ export function CompaniesPage() {
         if (city) qb = qb.ilike("city", city.replace(/[%_\\]/g, (c) => `\\${c}`));
         if (min !== null && Number.isFinite(min)) qb = qb.gte("score", min);
         if (!showDnc) qb = qb.eq("is_dnc", false);
-        if (query) qb = qb.or(`name.ilike.*${query}*,domain.ilike.*${query}*`);
+        if (query) qb = qb.or(`name_search.ilike.*${foldVi(query)}*,domain.ilike.*${query}*`);
         if (sort === "score") qb = qb.order("score", { ascending: false, nullsFirst: false });
         else if (sort === "name") qb = qb.order("name");
         else qb = qb.order("last_seen_at", { ascending: false });

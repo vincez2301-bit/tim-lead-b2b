@@ -19,6 +19,11 @@ import {
   type DealRow,
   type Stage,
   type Tier,
+  RENEWAL_WINDOW_DAYS,
+  addDays,
+  todayIso,
+  foldVi,
+  staleDays,
 } from "../lib/pipeline";
 import { Badge, EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
 import { DealPanel } from "../components/DealPanel";
@@ -53,10 +58,10 @@ export function PipelinePage() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    const s = foldVi(q.trim());
     return (rows ?? []).filter(
       (r) =>
-        (!s || r.company_name.toLowerCase().includes(s) || (r.domain ?? "").includes(s)) &&
+        (!s || foldVi(r.company_name).includes(s) || (r.domain ?? "").includes(s)) &&
         (!owner || (owner === "me" ? r.owner_id === session?.user.id : owner === "none" ? !r.owner_id : r.owner_id === owner)) &&
         (!segment || r.segment === segment) &&
         (!tier || r.tier === tier),
@@ -65,6 +70,8 @@ export function PipelinePage() {
 
   const fc = useMemo(() => forecast(filtered), [filtered]);
   const overdue = filtered.filter((r) => OPEN_STAGES.includes(r.stage) && dueState(r.next_action_at) === "overdue").length;
+  const renewLimit = addDays(todayIso(), RENEWAL_WINDOW_DAYS);
+  const renewing = filtered.filter((r) => r.stage === "won" && r.renewal_at && r.renewal_at <= renewLimit);
   const columns = showClosed ? [...OPEN_STAGES, ...CLOSED_STAGES] : OPEN_STAGES;
 
   async function moveTo(id: string, stage: Stage) {
@@ -117,6 +124,12 @@ export function PipelinePage() {
         <div className="card stat">
           <span className="stat-label">Đã ký ({filtered.filter((r) => r.stage === "won").length} khách)</span>
           <span className="stat-value">{fmtUsd(fc.won)}</span>
+        </div>
+        <div className="card stat">
+          <span className="stat-label">Gia hạn trong {RENEWAL_WINDOW_DAYS} ngày</span>
+          <span className={renewing.length ? "stat-value text-warn" : "stat-value"}>
+            {renewing.length} <span className="small muted">{fmtUsd(renewing.reduce((a, r) => a + (r.est_arr_usd ?? 0), 0))}</span>
+          </span>
         </div>
         <div className="card stat">
           <span className="stat-label">Việc quá hạn</span>
@@ -218,6 +231,7 @@ export function PipelinePage() {
 function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () => void }) {
   const due = dueState(r.next_action_at);
   const pct = Math.min(100, Math.round((100 * r.touches) / TOUCH_GOAL));
+  const stale = staleDays(r);
   return (
     <button
       type="button"
@@ -244,6 +258,12 @@ function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () 
           {r.effective_at ? ` · hiệu lực ${fmtDay(r.effective_at)}` : ""}
         </div>
       )}
+      {r.stage === "won" && r.renewal_at && (
+        <div className={`small due due-${r.renewal_at < todayIso() ? "overdue" : r.renewal_at <= addDays(todayIso(), RENEWAL_WINDOW_DAYS) ? "today" : "later"}`}>
+          Gia hạn {fmtDay(r.renewal_at)}
+        </div>
+      )}
+      {stale !== null && <Badge tone="orange">Đứng yên {stale} ngày</Badge>}
       {r.contract_end && (
         <div className="small muted">
           Hết HĐ {r.competitor ? `với ${r.competitor} ` : ""}: {fmtDay(r.contract_end)}

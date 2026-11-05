@@ -8,6 +8,7 @@ import { errMsg, fmtDate } from "../lib/format";
 import { Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { confirmDialog } from "../components/dialog";
 import { getSender, signature, type Sender } from "../lib/pipeline";
+import { downloadBackup, downloadPipelineCsv } from "../lib/backup";
 import { SignalsPage } from "./Signals";
 import { DncPage } from "./Dnc";
 import { LogsPage } from "./Logs";
@@ -451,6 +452,41 @@ function SenderForm({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+function BackupSection() {
+  const [busy, setBusy] = useState<"" | "json" | "csv">("");
+  const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  async function run(kind: "json" | "csv") {
+    setBusy(kind);
+    setMsg(null);
+    try {
+      const n = kind === "json" ? await downloadBackup() : await downloadPipelineCsv();
+      setMsg({ kind: "ok", text: kind === "json" ? `Đã tải bản sao lưu (${n} dòng dữ liệu).` : `Đã xuất ${n} deal ra file CSV.` });
+    } catch (e) {
+      setMsg({ kind: "error", text: errMsg(e) });
+    } finally {
+      setBusy("");
+    }
+  }
+  return (
+    <div className="card">
+      <h2>Sao lưu dữ liệu</h2>
+      <p className="small muted">
+        Lịch sử điểm chạm, khách đã ký và ghi chú chỉ nằm trong database. Gói Supabase miễn phí thường không có bản sao lưu tự
+        động để khôi phục (xem Supabase → Database → Backups). Nên tải bản sao lưu mỗi tuần và cất vào Google Drive.
+      </p>
+      <div className="row">
+        <button type="button" className="btn-primary" disabled={!!busy} onClick={() => void run("json")}>
+          {busy === "json" ? "Đang tải…" : "Tải bản sao lưu (JSON)"}
+        </button>
+        <button type="button" disabled={!!busy} onClick={() => void run("csv")}>
+          {busy === "csv" ? "Đang xuất…" : "Xuất pipeline ra Excel (CSV)"}
+        </button>
+      </div>
+      {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+    </div>
+  );
+}
+
 function GeneralSettings() {
   const { isAdmin, profile } = useAuth();
   const { rows, settings, loading, error, reload } = useSettings();
@@ -468,6 +504,7 @@ function GeneralSettings() {
       {!isAdmin && <Notice kind="info">Chỉ admin được sửa cài đặt. Vai trò của bạn: {profile?.role ?? "user"}.</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       <SenderForm isAdmin={isAdmin} />
+      <BackupSection />
       <MfaSection />
       {isAdmin && <UsersSection />}
       {isAdmin && <PurgeSection defaultMonths={retention} />}

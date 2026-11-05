@@ -42,6 +42,8 @@ export interface Deal {
   contract_end: string | null;
   signed_at: string | null;
   effective_at: string | null;
+  /** Ngày hết hạn / gia hạn hợp đồng của khách đã ký (database tự điền mốc tròn năm kế tiếp). */
+  renewal_at: string | null;
   source: string | null;
   notes: string | null;
   created_by: string | null;
@@ -440,4 +442,40 @@ export async function addToSalesPipeline(ids: string[]): Promise<{ added: number
     )
     .select("id");
   return { added: data?.length ?? 0, error: error?.message ?? null };
+}
+
+// ------------------------------------------------------------------ Gia hạn, đứng yên, nhập tiền, tìm không dấu
+/** Nhắc gia hạn trước bao nhiêu ngày. */
+export const RENEWAL_WINDOW_DAYS = 90;
+/** Deal đang mở không có điểm chạm / đổi giai đoạn quá số ngày này thì coi là đứng yên. */
+export const STALE_DAYS = 21;
+
+/** Số ngày deal đứng yên (kể từ lần điểm chạm hoặc đổi giai đoạn gần nhất); null nếu chưa tới ngưỡng. */
+export function staleDays(r: Pick<DealRow, "stage" | "stage_changed_at" | "last_touch_at">): number | null {
+  if (!OPEN_STAGES.includes(r.stage) || r.stage === "new") return null;
+  const last = [r.stage_changed_at, r.last_touch_at].filter(Boolean).sort().pop();
+  if (!last) return null;
+  const days = Math.floor((Date.now() - new Date(last).getTime()) / 86_400_000);
+  return days >= STALE_DAYS ? days : null;
+}
+
+/**
+ * Đọc số tiền theo cách người Việt gõ: "10.206", "10,206", "10 206", "$10,206" đều là 10206;
+ * "1.234.567" là 1234567; "12,5" hoặc "12.5" là 12.5. Trả về null nếu không đọc được.
+ */
+export function parseAmount(input: string): number | null {
+  const s = input.replace(/[\s$₫đUSDVNDusdvnd]/g, "");
+  if (!s) return null;
+  if (!/^[0-9.,]+$/.test(s)) return null;
+  // Dấu chấm/phẩy theo sau đúng 3 chữ số (và lặp lại) là phân nhóm hàng nghìn.
+  if (/^\d{1,3}([.,]\d{3})+$/.test(s)) return Number(s.replace(/[.,]/g, ""));
+  const parts = s.split(/[.,]/);
+  if (parts.length > 2) return null;
+  const n = Number(parts.join("."));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Bỏ dấu tiếng Việt và viết thường để tìm kiếm: "Sóng Việt" → "song viet". */
+export function foldVi(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase();
 }

@@ -7,12 +7,14 @@ import { rememberFilter, rememberedFilter } from "../lib/settings";
 import {
   LOST_REASON_LABEL,
   OPEN_STAGES,
+  RENEWAL_WINDOW_DAYS,
   SEGMENT_PRIORITY,
   STAGE_LABEL,
   TOUCH_GOAL,
   addDays,
   dueState,
   fmtDay,
+  fmtUsd,
   todayIso,
   type DealRow,
 } from "../lib/pipeline";
@@ -34,12 +36,23 @@ export function TodayPage() {
   const [queue, setQueue] = useState<string[] | null>(null);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const [qualifyAll, setQualifyAll] = useState(false);
+  const [renewals, setRenewals] = useState<DealRow[]>([]);
   const tab = (params.get("tab") as "qualify" | "touches" | null) ?? undefined;
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from("deal_board").select("*").in("stage", [...OPEN_STAGES, "nurture"]).limit(3000);
-    if (error) setError(error.message);
-    setRows((data ?? []) as DealRow[]);
+    const [openRes, wonRes] = await Promise.all([
+      supabase.from("deal_board").select("*").in("stage", [...OPEN_STAGES, "nurture"]).limit(3000),
+      supabase
+        .from("deal_board")
+        .select("*")
+        .eq("stage", "won")
+        .not("renewal_at", "is", null)
+        .lte("renewal_at", addDays(todayIso(), RENEWAL_WINDOW_DAYS))
+        .order("renewal_at"),
+    ]);
+    if (openRes.error || wonRes.error) setError((openRes.error ?? wonRes.error)!.message);
+    setRows((openRes.data ?? []) as DealRow[]);
+    setRenewals((wonRes.data ?? []) as DealRow[]);
   }, []);
   useEffect(() => {
     void load();
@@ -159,6 +172,19 @@ export function TodayPage() {
             action="Ghi điểm chạm"
             onOpen={(id) => open(id, "touches")}
           />
+          {renewals.length > 0 && (
+            <TaskList
+              title={`Sắp gia hạn hợp đồng (${RENEWAL_WINDOW_DAYS} ngày tới)`}
+              empty=""
+              rows={renewals.map((r) => ({
+                ...r,
+                next_action_at: r.renewal_at,
+                next_action: `Gọi chốt gia hạn${r.est_arr_usd ? ` · ARR ${fmtUsd(r.est_arr_usd)}` : ""} — hỏi mức dùng nhạc, đề xuất gói năm tới`,
+              }))}
+              action="Mở"
+              onOpen={(id) => open(id, "touches")}
+            />
+          )}
           <TaskList
             title="Cần đánh giá trước khi tiếp cận"
             empty="Không còn lead chờ đánh giá."

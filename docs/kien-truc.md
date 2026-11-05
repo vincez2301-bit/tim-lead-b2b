@@ -71,3 +71,26 @@ Có thể làm thêm khi cần:
   `@supabase/auth-js` bớt khoảng 20–25 KB nén, nhưng phải kiểm tra kỹ đăng nhập và MFA.
 - Hôm nay và Pipeline đọc `deal_board` tới 3.000 dòng mỗi lần. Với vài trăm deal là đủ nhanh; khi vượt khoảng 2.000 deal
   nên chỉ chọn cột cần dùng và lọc theo giai đoạn ở server.
+
+## 5. Đối chiếu với “Bản đồ tính năng CRM” (11/2026)
+
+Bigfish là công cụ một người dùng, bán thuê bao bản quyền nhạc (B2B, gia hạn theo năm). Đối chiếu các mục MVP và
+phần riêng ngành “Dịch vụ B2B”:
+
+| Mã | Tính năng | Bigfish |
+|---|---|---|
+| KH-01, KH-02 | Hồ sơ công ty, liên hệ; tìm và lọc | Có |
+| KH-03 | Tìm không dấu | **Mới thêm**: “song viet” ra “Sóng Việt” (cột `companies.name_search`, Pipeline lọc không dấu) |
+| LD-01, LD-02 | Lead có nguồn, chuyển thành cơ hội | Có (Tìm khách mới / Nhập file → Đưa vào Pipeline) |
+| CH-01…03, CH-06 | Kanban, giá trị, xác suất, thắng/thua kèm lý do, dự báo | Có |
+| CH-05 | Cảnh báo cơ hội đứng yên | **Mới thêm**: thẻ “Đứng yên N ngày” khi 21 ngày không có điểm chạm hay đổi giai đoạn |
+| VC-01…04, BC-01 | Việc có hạn, ghi nhanh, dòng thời gian, điện thoại, “việc của tôi” | Có (Hôm nay, 19 điểm chạm) |
+| B2B-02, CS-02, BG-07 | Hợp đồng, ngày hết hạn, nhắc gia hạn | **Mới thêm**: `deals.renewal_at` tự điền mốc tròn năm kế tiếp từ ngày hiệu lực; Hôm nay có mục “Sắp gia hạn” 90 ngày; KPI trên Pipeline |
+| TH-01 | Nhập Excel | Một phần: JSON / CSV (chưa đọc thẳng .xlsx) |
+| TH-03, TH-05 | Sao lưu, xuất Excel | **Mới thêm**: Cài đặt → Sao lưu dữ liệu (JSON đầy đủ, CSV pipeline có BOM cho Excel) |
+| Bài học “ô tiền” | Ô số của trình duyệt đọc sai “10.206” | **Đã sửa**: ô ARR đọc được 10.206 / 10,206 / $10,206 và hiện lại số đã hiểu |
+| Bài học “ngày và múi giờ” | Ngày lùi một ngày ở giờ Việt Nam | Đã đúng: mọi ngày tính theo giờ máy (`isoDate` bù múi giờ) |
+| VC-05 | Nhắc qua email / thông báo | Chưa có: chỉ hiện trong app |
+| BG-01, BG-02, B2B-01 | Danh mục gói, báo giá PDF | Chưa có |
+| TH-02 | Đính kèm file (hợp đồng, đề xuất) | Chưa có |
+| MK-01 | Nhật ký đồng ý nhận tin | Chưa có; đang có danh sách loại trừ và xoá dữ liệu theo yêu cầu |

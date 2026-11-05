@@ -8,6 +8,8 @@ import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtDate } from "../lib/format";
 import {
   BILLING_LABEL,
+  fmtUsd,
+  parseAmount,
   LOST_REASONS,
   LOST_REASON_LABEL,
   LOST_REASON_RULE,
@@ -733,6 +735,7 @@ function InfoTab({
     contract_end: deal.contract_end ?? "",
     signed_at: deal.signed_at ?? "",
     effective_at: deal.effective_at ?? "",
+    renewal_at: deal.renewal_at ?? "",
     notes: deal.notes ?? "",
   });
   const [c, setC] = useState({ name: "", title: "", email: "", phone: "" });
@@ -758,9 +761,11 @@ function InfoTab({
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          const arr = parseAmount(f.est_arr_usd);
+          if (f.est_arr_usd.trim() && arr === null) return setError(`Không đọc được số tiền “${f.est_arr_usd}”. Gõ ví dụ 10206 hoặc 10.206.`);
           void patch(
             {
-              est_arr_usd: num(f.est_arr_usd),
+              est_arr_usd: arr,
               probability: num(f.probability),
               expected_close: f.expected_close || null,
               billing: (f.billing || null) as Billing | null,
@@ -771,6 +776,7 @@ function InfoTab({
               contract_end: f.contract_end || null,
               signed_at: f.signed_at || null,
               effective_at: f.effective_at || null,
+              ...(deal.stage === "won" ? { renewal_at: f.renewal_at || null } : {}),
               notes: f.notes.trim() || null,
             },
             "Đã lưu.",
@@ -780,7 +786,18 @@ function InfoTab({
         <div className="form-grid">
           <label>
             ARR dự kiến (USD)
-            <input type="number" min={0} step={1} value={f.est_arr_usd} onChange={set("est_arr_usd")} />
+            <input
+              inputMode="decimal"
+              value={f.est_arr_usd}
+              onChange={set("est_arr_usd")}
+              placeholder="VD: 10.206"
+              aria-describedby="arr-hint"
+            />
+            {f.est_arr_usd.trim() && (
+              <span id="arr-hint" className={parseAmount(f.est_arr_usd) === null ? "small text-danger" : "small muted"}>
+                {parseAmount(f.est_arr_usd) === null ? "Chưa đọc được số này" : `= ${fmtUsd(parseAmount(f.est_arr_usd))}`}
+              </span>
+            )}
           </label>
           <label>
             Xác suất (%)
@@ -818,6 +835,11 @@ function InfoTab({
               <label>
                 Ngày hiệu lực
                 <input type="date" value={f.effective_at} onChange={set("effective_at")} />
+              </label>
+              <label>
+                Ngày gia hạn
+                <input type="date" value={f.renewal_at} onChange={set("renewal_at")} />
+                <span className="small muted">Để trống: tự tính mốc tròn năm kế tiếp từ ngày hiệu lực.</span>
               </label>
             </>
           )}
