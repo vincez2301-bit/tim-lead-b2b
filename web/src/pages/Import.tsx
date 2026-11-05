@@ -6,6 +6,9 @@ import { useAuth } from "../lib/auth";
 import { parseCsv } from "../lib/csv";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtNum } from "../lib/format";
 import { Notice, PageHeader } from "../components/ui";
+import { confirmDialog } from "../components/dialog";
+import { useSettings } from "../lib/settings";
+import { getPlaybook, mergeObjections, parseObjectionFile } from "../lib/pipeline";
 
 interface ImportRow {
   name: string;
@@ -83,6 +86,13 @@ function fromCsv(text: string): ImportRow[] {
   return [...map.values()];
 }
 
+function isPlaybookFile(j: unknown): boolean {
+  if (!j || typeof j !== "object") return false;
+  const o = j as { kind?: unknown; items?: unknown };
+  if (o.kind === "bigfish-objections") return true;
+  return Array.isArray(o.items) && o.items.some((x) => x && typeof x === "object" && "title" in x && ("short" in x || "text" in x));
+}
+
 export function ImportPage() {
   const { isAdmin } = useAuth();
   const [rows, setRows] = useState<ImportRow[] | null>(null);
@@ -91,12 +101,32 @@ export function ImportPage() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<Stats | null>(null);
+  const [playbookMsg, setPlaybookMsg] = useState<string | null>(null);
+  const { settings, save } = useSettings();
+
+  /** File kịch bản xử lý từ chối ({kind:"bigfish-objections", items:[…]}) → gộp vào kho Xử lý từ chối. */
+  async function importPlaybook(text: string) {
+    const incoming = parseObjectionFile(text);
+    if (!incoming.length) throw new Error("File kịch bản không có câu trả lời nào đọc được.");
+    const { list, added, updated } = mergeObjections(getPlaybook(settings), incoming);
+    const ok = await confirmDialog({
+      title: `Nhập ${incoming.length} câu trả lời vào kho Xử lý từ chối?`,
+      message: `Thêm mới ${added} câu, thay ${updated} câu trùng tiêu đề. Các câu khác giữ nguyên.`,
+      confirmLabel: "Nhập",
+    });
+    if (!ok) return;
+    const err = await save("objection_playbook", list);
+    if (err) throw new Error(err);
+    setPlaybookMsg(`Đã nhập kịch bản: thêm ${added}, cập nhật ${updated} câu trả lời.`);
+  }
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     setError(null);
     setResult(null);
     setRows(null);
+    setPlaybookMsg(null);
+    e.target.value = "";
     if (!f) return;
     setFileName(f.name);
     try {
@@ -104,6 +134,10 @@ export function ImportPage() {
       let data: ImportRow[];
       if (/\.json$/i.test(f.name)) {
         const j = JSON.parse(text) as unknown;
+        if (isPlaybookFile(j)) {
+          await importPlaybook(text);
+          return;
+        }
         data = (Array.isArray(j) ? j : (j as { rows?: unknown }).rows) as ImportRow[];
         if (!Array.isArray(data)) throw new Error("File JSON phải là mảng lead (hoặc { rows: [...] }).");
       } else {
@@ -148,14 +182,15 @@ export function ImportPage() {
     <section>
       <PageHeader
         title="Nhập dữ liệu"
-        description="Nhập danh sách lead / deal từ file vào pipeline. Công ty trùng tên hoặc domain được gộp; chạy lại cùng file không nhân đôi dữ liệu."
+        description="Nhập danh sách lead / deal vào pipeline, hoặc file kịch bản xử lý từ chối. Công ty trùng tên hoặc domain được gộp; chạy lại cùng file không nhân đôi dữ liệu."
       />
       {!isAdmin && <Notice kind="info">Chỉ admin được nhập dữ liệu.</Notice>}
       <div className="card">
         <h2>1. Chọn file</h2>
         <p className="muted small">
           Nhận file <strong>.json</strong> (định dạng đầy đủ: lead, người liên hệ, lịch sử điểm chạm) hoặc <strong>.csv</strong> mỗi dòng một
-          người liên hệ với các cột: <code>{CSV_COLS}</code>.
+          người liên hệ với các cột: <code>{CSV_COLS}</code>. File kịch bản xử lý từ chối (<code>kich-ban-tu-choi.json</code>) cũng nhập
+          ở đây được — app tự nhận ra và đưa vào kho Xử lý từ chối.
         </p>
         <label className="file-drop">
           <Upload aria-hidden="true" />
@@ -164,6 +199,11 @@ export function ImportPage() {
         </label>
       </div>
       {error && <Notice kind="error">{error}</Notice>}
+      {playbookMsg && (
+        <Notice kind="ok">
+          {playbookMsg} <Link to="/library/objections">Mở Xử lý từ chối →</Link>
+        </Notice>
+      )}
       {rows && (
         <div className="card">
           <h2>2. Kiểm tra trước khi nhập</h2>
