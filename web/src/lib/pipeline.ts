@@ -197,10 +197,101 @@ export const LOST_REASON_RULE: Record<LostReason, string> = {
   other: "Liên hệ lại sau 3 tháng.",
 };
 
+export type ObjectionTopic = "price" | "plan" | "usage" | "competitor" | "product" | "trust" | "legal" | "contract";
+export const OBJECTION_TOPICS: ObjectionTopic[] = ["price", "plan", "usage", "competitor", "product", "trust", "legal", "contract"];
+export const OBJECTION_TOPIC_LABEL: Record<ObjectionTopic, string> = {
+  price: "Giá & ngân sách",
+  plan: "Gói & cách mua",
+  usage: "Ít dự án / cam kết 1 năm",
+  competitor: "Đang dùng nguồn nhạc khác",
+  product: "Kho nhạc & định dạng",
+  trust: "Uy tín & rủi ro",
+  legal: "Bản quyền & pháp lý",
+  contract: "Hợp đồng & thanh toán",
+};
+/** Chủ đề nên mở khi khách từ chối vì lý do này. */
+export const REASON_TOPICS: Record<LostReason, ObjectionTopic[]> = {
+  price: ["price", "plan"],
+  competitor: ["competitor"],
+  no_need: ["usage", "product", "legal"],
+  timing: ["usage"],
+  no_contact: [],
+  other: [],
+};
+const TOPIC_REASON: Record<ObjectionTopic, LostReason> = {
+  price: "price",
+  plan: "price",
+  usage: "timing",
+  competitor: "competitor",
+  product: "no_need",
+  trust: "other",
+  legal: "no_need",
+  contract: "other",
+};
+
 export interface Objection {
   reason: LostReason;
   title: string;
+  /** Câu trả lời đầy đủ (email / văn bản). */
   text: string;
+  topic?: ObjectionTopic;
+  /** Câu nói ngắn 1–3 câu khi gọi điện / nhắn Zalo. */
+  short?: string;
+  source?: string;
+  /** Bản nháp chưa duyệt. */
+  draft?: boolean;
+  /** Việc cần kiểm tra trước khi dùng. */
+  check?: string;
+}
+
+export function objectionTopic(o: Objection): ObjectionTopic {
+  if (o.topic && o.topic in OBJECTION_TOPIC_LABEL) return o.topic;
+  return o.reason === "price" ? "price" : o.reason === "competitor" ? "competitor" : o.reason === "no_contact" || o.reason === "other" ? "trust" : "usage";
+}
+
+function normObjection(x: Partial<Objection>): Objection | null {
+  if (!x || typeof x.title !== "string" || !x.title.trim()) return null;
+  const text = typeof x.text === "string" && x.text.trim() ? x.text : typeof x.short === "string" ? x.short : "";
+  if (!text.trim()) return null;
+  const topic = x.topic && x.topic in OBJECTION_TOPIC_LABEL ? x.topic : undefined;
+  const reason = (x.reason && x.reason in LOST_REASON_LABEL ? x.reason : topic ? TOPIC_REASON[topic] : "other") as LostReason;
+  return {
+    reason,
+    title: x.title.trim(),
+    text,
+    ...(topic ? { topic } : {}),
+    ...(typeof x.short === "string" && x.short.trim() ? { short: x.short.trim() } : {}),
+    ...(typeof x.source === "string" && x.source ? { source: x.source } : {}),
+    ...(x.draft ? { draft: true } : {}),
+    ...(typeof x.check === "string" && x.check.trim() ? { check: x.check.trim() } : {}),
+  };
+}
+
+/** Đọc file kịch bản (JSON: mảng hoặc {items: [...]}) → danh sách đã kiểm tra. */
+export function parseObjectionFile(raw: string): Objection[] {
+  const data = JSON.parse(raw) as unknown;
+  const list = Array.isArray(data) ? data : (data as { items?: unknown })?.items;
+  if (!Array.isArray(list)) throw new Error("File không đúng định dạng: cần một mảng câu trả lời hoặc { items: [...] }.");
+  return list.map((x) => normObjection(x as Partial<Objection>)).filter((x): x is Objection => !!x);
+}
+
+/** Gộp: câu cùng tiêu đề (không phân biệt dấu) thì thay, câu mới thì thêm. */
+export function mergeObjections(current: Objection[], incoming: Objection[]): { list: Objection[]; added: number; updated: number } {
+  const key = (o: Objection) => foldVi(o.title).replace(/[^a-z0-9]+/g, " ").trim();
+  const list = [...current];
+  let added = 0;
+  let updated = 0;
+  for (const o of incoming) {
+    const i = list.findIndex((x) => key(x) === key(o));
+    if (i >= 0) {
+      list[i] = o;
+      updated++;
+    } else {
+      list.push(o);
+      added++;
+    }
+  }
+  return { list, added, updated };
 }
 export interface Playlist {
   title: string;
@@ -211,7 +302,7 @@ export interface Playlist {
 
 export function getPlaybook(s: SettingsMap): Objection[] {
   const v = s["objection_playbook"];
-  return Array.isArray(v) ? (v as Objection[]).filter((x) => x && x.title && x.text) : [];
+  return Array.isArray(v) ? (v as Partial<Objection>[]).map(normObjection).filter((x): x is Objection => !!x) : [];
 }
 export function getPlaylists(s: SettingsMap): Playlist[] {
   const v = s["playlists"];

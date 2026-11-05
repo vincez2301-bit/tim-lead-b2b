@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
@@ -11,7 +11,14 @@ import {
   LOST_REASONS,
   LOST_REASON_LABEL,
   LOST_REASON_RULE,
+  OBJECTION_TOPICS,
+  OBJECTION_TOPIC_LABEL,
   STAGE_LABEL,
+  foldVi,
+  mergeObjections,
+  objectionTopic,
+  parseObjectionFile,
+  type ObjectionTopic,
   dueState,
   fmtDay,
   getCadence,
@@ -351,17 +358,22 @@ function TemplateEditor({
 }
 
 // ================================================================== Xử lý từ chối
+const EMPTY_OBJECTION: Objection = { reason: "other", topic: "price", title: "", short: "", text: "" };
+
 export function ObjectionLibraryPage() {
   const { isAdmin } = useAuth();
   const { settings, loading, save } = useSettings();
   const playbook = getPlaybook(settings);
   const [params, setParams] = useSearchParams();
   const openId = params.get("deal");
-  const [reason, setReason] = useState<LostReason | "">("");
+  const [topic, setTopic] = useState<ObjectionTopic | "">("");
+  const [q, setQ] = useState("");
+  const [onlyCheck, setOnlyCheck] = useState(false);
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const [draft, setDraft] = useState<Objection | null>(null);
-  const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ kind: "ok" | "error" | "warn"; text: string } | null>(null);
   const [rejected, setRejected] = useState<DealRow[] | null>(null);
+  const [reasonFilter, setReasonFilter] = useState<LostReason | "">("");
 
   const loadRejected = useCallback(async () => {
     const { data } = await supabase
@@ -385,39 +397,81 @@ export function ObjectionLibraryPage() {
     }
   }
 
+  async function importFile(file: File) {
+    setMsg(null);
+    try {
+      const incoming = parseObjectionFile(await file.text());
+      if (!incoming.length) return setMsg({ kind: "warn", text: "File không có câu trả lời nào đọc được." });
+      const { list, added, updated } = mergeObjections(playbook, incoming);
+      const ok = await confirmDialog({
+        title: `Nhập ${incoming.length} câu trả lời?`,
+        message: `Thêm mới ${added} câu, thay ${updated} câu trùng tiêu đề. Các câu khác giữ nguyên.`,
+        confirmLabel: "Nhập",
+      });
+      if (ok) await persist(list, `Đã nhập: thêm ${added}, cập nhật ${updated}.`);
+    } catch (e) {
+      setMsg({ kind: "error", text: `Không đọc được file: ${(e as Error).message}` });
+    }
+  }
+
+  const items = useMemo(() => {
+    const f = foldVi(q.trim());
+    return playbook
+      .map((o, i) => ({ o, i, t: objectionTopic(o) }))
+      .filter(({ o }) => !onlyCheck || o.check || o.draft)
+      .filter(({ o }) => !f || foldVi(`${o.title} ${o.short ?? ""} ${o.text}`).includes(f));
+  }, [playbook, q, onlyCheck]);
+  const count = (t: ObjectionTopic) => items.filter((x) => x.t === t).length;
+  const topics = (topic ? [topic] : OBJECTION_TOPICS).filter((t) => count(t) > 0 || (editing === "new" && draft?.topic === t));
+  const people = (rejected ?? []).filter((d) => !reasonFilter || (d.lost_reason_code ?? "other") === reasonFilter);
+
   if (loading) return <Spinner />;
 
-  const reasons = reason ? [reason] : LOST_REASONS;
-  const byReason = (r: LostReason) => (rejected ?? []).filter((d) => (d.lost_reason_code ?? "other") === r);
   const editor = draft && (
     <div className="card editor">
       <div className="form-grid">
         <label>
-          Lý do từ chối
-          <select value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value as LostReason })}>
-            {LOST_REASONS.map((r) => (
-              <option key={r} value={r}>
-                {LOST_REASON_LABEL[r]}
+          Chủ đề
+          <select value={draft.topic ?? "price"} onChange={(e) => setDraft({ ...draft, topic: e.target.value as ObjectionTopic })}>
+            {OBJECTION_TOPICS.map((t) => (
+              <option key={t} value={t}>
+                {OBJECTION_TOPIC_LABEL[t]}
               </option>
             ))}
           </select>
         </label>
         <label>
-          Tình huống
+          Khách nói gì
           <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="VD: “Bên anh dùng nhạc miễn phí”" />
         </label>
       </div>
       <label>
-        Cách trả lời
-        <textarea rows={6} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
+        Câu trả lời ngắn (khi gọi điện / nhắn Zalo)
+        <textarea rows={3} value={draft.short ?? ""} onChange={(e) => setDraft({ ...draft, short: e.target.value })} />
+      </label>
+      <label>
+        Câu trả lời đầy đủ (email / văn bản)
+        <textarea rows={8} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} />
+      </label>
+      <label>
+        Cần kiểm tra trước khi dùng (để trống nếu đã ổn)
+        <input value={draft.check ?? ""} onChange={(e) => setDraft({ ...draft, check: e.target.value })} />
       </label>
       <div className="row">
         <button
           type="button"
           className="btn-primary"
           onClick={() => {
-            if (!draft.title.trim() || !draft.text.trim()) return setMsg({ kind: "error", text: "Cần tình huống và cách trả lời." });
-            void persist(editing === "new" ? [...playbook, draft] : playbook.map((o, i) => (i === editing ? draft : o)), "Đã lưu.");
+            const clean: Objection = {
+              ...draft,
+              title: draft.title.trim(),
+              short: draft.short?.trim() || undefined,
+              text: draft.text.trim() || draft.short?.trim() || "",
+              check: draft.check?.trim() || undefined,
+              draft: draft.check?.trim() ? draft.draft : undefined,
+            };
+            if (!clean.title || !clean.text) return setMsg({ kind: "error", text: "Cần ghi khách nói gì và ít nhất một câu trả lời." });
+            void persist(editing === "new" ? [...playbook, clean] : playbook.map((o, i) => (i === editing ? clean : o)), "Đã lưu.");
           }}
         >
           Lưu
@@ -439,64 +493,87 @@ export function ObjectionLibraryPage() {
     <section>
       <PageHeader
         title="Xử lý từ chối"
-        description="Câu trả lời mẫu cho từng kiểu từ chối, và những khách đã từ chối đang chờ liên hệ lại đúng thời điểm."
+        description="Khách nói gì — mình trả lời gì. Câu ngắn để nói khi gọi hoặc nhắn Zalo, bản đầy đủ để gửi email."
         actions={
           isAdmin && (
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => {
-                setEditing("new");
-                setDraft({ reason: reason || "price", title: "", text: "" });
-              }}
-            >
-              <Plus aria-hidden="true" /> Thêm câu trả lời
-            </button>
+            <>
+              <label className="btn file-btn">
+                <Upload aria-hidden="true" /> Nhập từ file
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void importFile(f);
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setEditing("new");
+                  setDraft({ ...EMPTY_OBJECTION, topic: topic || "price" });
+                }}
+              >
+                <Plus aria-hidden="true" /> Thêm câu trả lời
+              </button>
+            </>
           )
         }
       />
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
       <div className="card filters-card">
-        <div className="chips" role="group" aria-label="Lý do">
-          <button type="button" className={reason === "" ? "chip on" : "chip"} onClick={() => setReason("")}>
-            Mọi lý do
+        <div className="row">
+          <input className="grow search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm: đắt, hợp đồng, VCPMC, độc quyền… (gõ không dấu cũng được)" aria-label="Tìm câu trả lời" />
+          <label className="checkbox inline">
+            <input type="checkbox" checked={onlyCheck} onChange={(e) => setOnlyCheck(e.target.checked)} />
+            Chỉ mục cần kiểm tra
+          </label>
+        </div>
+        <div className="chips" role="group" aria-label="Chủ đề">
+          <button type="button" className={topic === "" ? "chip on" : "chip"} onClick={() => setTopic("")}>
+            Tất cả <span className="chip-count">{items.length}</span>
           </button>
-          {LOST_REASONS.map((r) => (
-            <button key={r} type="button" className={reason === r ? "chip on" : "chip"} onClick={() => setReason(r)}>
-              {LOST_REASON_LABEL[r]}
-              {rejected && byReason(r).length > 0 && <span className="chip-count">{byReason(r).length}</span>}
+          {OBJECTION_TOPICS.map((t) => (
+            <button key={t} type="button" className={topic === t ? "chip on" : "chip"} onClick={() => setTopic(t)}>
+              {OBJECTION_TOPIC_LABEL[t]} <span className="chip-count">{count(t)}</span>
             </button>
           ))}
         </div>
-        <p className="small muted">
-          Khi khách từ chối, mở khách đó → tab Điểm chạm → “Khách từ chối…”: app ghi lý do và tự hẹn ngày liên hệ lại theo quy tắc bên dưới.
-        </p>
       </div>
       {editing === "new" && editor}
 
-      {reasons.map((r) => {
-        const items = playbook.map((o, i) => ({ o, i })).filter(({ o }) => o.reason === r);
-        const people = byReason(r);
-        if (!items.length && !people.length && reason !== r) return null;
-        return (
-          <div key={r} className="card reason-block">
-            <div className="row space-between">
-              <h2>{LOST_REASON_LABEL[r]}</h2>
-              <span className="small muted">{LOST_REASON_RULE[r]}</span>
-            </div>
-            {items.length === 0 ? (
-              <p className="small muted">Chưa có câu trả lời mẫu cho lý do này.</p>
-            ) : (
-              <div className="objections">
-                {items.map(({ o, i }) =>
+      {playbook.length === 0 ? (
+        <div className="card">
+          <EmptyState title="Chưa có câu trả lời mẫu.">Bấm “Nhập từ file” để nạp bộ kịch bản, hoặc “Thêm câu trả lời”.</EmptyState>
+        </div>
+      ) : topics.length === 0 ? (
+        <div className="card">
+          <EmptyState title="Không có câu trả lời khớp bộ lọc." />
+        </div>
+      ) : (
+        topics.map((t) => (
+          <div key={t} className="card reason-block">
+            <h2>
+              {OBJECTION_TOPIC_LABEL[t]} <span className="count">{count(t)}</span>
+            </h2>
+            <div className="objections">
+              {items
+                .filter((x) => x.t === t)
+                .map(({ o, i }) =>
                   editing === i ? (
                     <div key={i}>{editor}</div>
                   ) : (
                     <article key={i} className="objection">
                       <div className="row space-between nowrap">
-                        <strong>{o.title}</strong>
+                        <div className="row">
+                          <strong>{o.title}</strong>
+                          {o.draft && <Badge tone="orange">Bản nháp</Badge>}
+                        </div>
                         <div className="row nowrap">
-                          <CopyButton text={o.text} />
+                          <CopyButton text={o.short ?? o.text} label={o.short ? "Chép câu ngắn" : "Chép"} />
                           {isAdmin && (
                             <>
                               <button
@@ -504,7 +581,7 @@ export function ObjectionLibraryPage() {
                                 className="btn-link small"
                                 onClick={() => {
                                   setEditing(i);
-                                  setDraft({ ...o });
+                                  setDraft({ ...o, topic: objectionTopic(o) });
                                 }}
                               >
                                 <Pencil aria-hidden="true" /> Sửa
@@ -524,56 +601,91 @@ export function ObjectionLibraryPage() {
                           )}
                         </div>
                       </div>
-                      <p className="pre-wrap">{o.text}</p>
+                      <p className="say">{o.short ?? o.text}</p>
+                      {o.short && o.text !== o.short && (
+                        <details className="full">
+                          <summary className="small">Câu trả lời đầy đủ (email)</summary>
+                          <div className="pre-wrap small-body">{o.text}</div>
+                          <CopyButton text={o.text} label="Chép bản đầy đủ" />
+                        </details>
+                      )}
+                      {o.check && <p className="small check">Cần kiểm tra: {o.check}</p>}
+                      {o.source && <p className="small muted">{o.source}</p>}
                     </article>
                   ),
                 )}
-              </div>
-            )}
-            {people.length > 0 && (
-              <>
-                <h3 className="sub">Khách đã từ chối vì lý do này ({people.length})</h3>
-                <TableWrap>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Công ty</th>
-                        <th>Nhóm</th>
-                        <th>Chi tiết</th>
-                        <th>Liên hệ lại</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {people.map((d) => (
-                        <tr key={d.id}>
-                          <td>
-                            <strong>{d.company_name}</strong>
-                            <div className="small muted">{STAGE_LABEL[d.stage]}</div>
-                          </td>
-                          <td className="small">{d.segment ? SEGMENT_LABEL[d.segment] : "—"}</td>
-                          <td className="small">
-                            {d.competitor ? `Đang dùng: ${d.competitor}` : ""}
-                            {d.contract_end ? ` · hết HĐ ${fmtDay(d.contract_end)}` : ""}
-                          </td>
-                          <td>
-                            <span className={`due due-${dueState(d.next_action_at)} small`}>{fmtDay(d.next_action_at)}</span>
-                          </td>
-                          <td>
-                            <button type="button" className="btn-sm" onClick={() => setParams({ deal: d.id, tab: "touches" })}>
-                              Mở
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </TableWrap>
-              </>
-            )}
+            </div>
           </div>
-        );
-      })}
+        ))
+      )}
+
+      <div className="card">
+        <div className="row space-between">
+          <h2>
+            Khách đã từ chối <span className="count">{rejected?.length ?? 0}</span>
+          </h2>
+          <select className="input-sm" value={reasonFilter} onChange={(e) => setReasonFilter(e.target.value as LostReason | "")} aria-label="Lọc theo lý do">
+            <option value="">Mọi lý do</option>
+            {LOST_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {LOST_REASON_LABEL[r]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="small muted">
+          Khi khách từ chối: mở khách → tab Điểm chạm → “Khách từ chối…”. App ghi lý do và tự hẹn ngày liên hệ lại.
+        </p>
+        {!rejected ? (
+          <Spinner />
+        ) : people.length === 0 ? (
+          <EmptyState title="Chưa có khách nào trong nhóm này." />
+        ) : (
+          <TableWrap>
+            <table>
+              <thead>
+                <tr>
+                  <th>Công ty</th>
+                  <th>Lý do</th>
+                  <th>Chi tiết</th>
+                  <th>Liên hệ lại</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {people.map((d) => {
+                  const r = (d.lost_reason_code ?? "other") as LostReason;
+                  return (
+                    <tr key={d.id}>
+                      <td>
+                        <strong>{d.company_name}</strong>
+                        <div className="small muted">
+                          {d.segment ? SEGMENT_LABEL[d.segment] : "—"} · {STAGE_LABEL[d.stage]}
+                        </div>
+                      </td>
+                      <td className="small" title={LOST_REASON_RULE[r]}>
+                        {LOST_REASON_LABEL[r]}
+                      </td>
+                      <td className="small">
+                        {d.competitor ? `Đang dùng: ${d.competitor}` : ""}
+                        {d.contract_end ? ` · hết HĐ ${fmtDay(d.contract_end)}` : ""}
+                      </td>
+                      <td>
+                        <span className={`due due-${dueState(d.next_action_at)} small`}>{fmtDay(d.next_action_at)}</span>
+                      </td>
+                      <td>
+                        <button type="button" className="btn-sm" onClick={() => setParams({ deal: d.id, tab: "touches" })}>
+                          Mở
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+      </div>
       {openId && (
         <DealPanel
           dealId={openId}

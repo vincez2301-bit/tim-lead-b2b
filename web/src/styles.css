@@ -2386,3 +2386,48 @@ body:has(.player) .content {
     animation: none !important;
   }
 }
+
+/* ------------------------------------------------------------------ kho xử lý từ chối */
+.file-btn {
+  flex-direction: row;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.file-btn input {
+  display: none;
+}
+input.search {
+  min-width: 220px;
+}
+.helpers input.search {
+  width: 100%;
+  max-width: none;
+  margin: 0.15rem 0 0.4rem;
+}
+.objection .say {
+  margin: 0.4rem 0 0.25rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+.objection details.full > summary {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.objection details.full[open] > summary {
+  margin-bottom: 0.4rem;
+}
+.small-body {
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--text-2);
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.4rem;
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 0 6px 6px 0;
+}
+.check {
+  margin: 0.35rem 0 0;
+  color: var(--orange-fg);
+}

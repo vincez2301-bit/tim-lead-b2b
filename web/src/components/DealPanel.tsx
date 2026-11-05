@@ -8,6 +8,9 @@ import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtDate } from "../lib/format";
 import {
   BILLING_LABEL,
+  REASON_TOPICS,
+  foldVi,
+  objectionTopic,
   fmtUsd,
   parseAmount,
   LOST_REASONS,
@@ -1041,15 +1044,18 @@ function Helpers({
   focusReason: LostReason | null;
 }) {
   const lists = playlists.filter((p) => !p.segments?.length || (segment && p.segments.includes(segment)));
-  const groups = LOST_REASONS.map((r) => [r, playbook.filter((o) => o.reason === r)] as const).filter(([, xs]) => xs.length);
+  const [q, setQ] = useState("");
+  const focusTopics = focusReason ? REASON_TOPICS[focusReason] : [];
+  const f = foldVi(q.trim());
+  const matched = playbook
+    .filter((o) => (f ? foldVi(`${o.title} ${o.short ?? ""} ${o.text}`).includes(f) : !focusTopics.length || focusTopics.includes(objectionTopic(o))))
+    .slice(0, 12);
   return (
     <div className="helpers">
       <details open={openPlaylists}>
         <summary>Playlist gợi ý ({lists.length})</summary>
         {lists.length === 0 ? (
-          <p className="small muted">
-            Chưa có playlist cho nhóm này. Thêm link playlist ở trang Nhạc mẫu.
-          </p>
+          <p className="small muted">Chưa có playlist cho nhóm này. Thêm link playlist ở trang Nhạc mẫu.</p>
         ) : (
           <ul className="snippets">
             {lists.map((p) => (
@@ -1064,27 +1070,37 @@ function Helpers({
           </ul>
         )}
       </details>
-      {groups.length > 0 && (
+      {playbook.length > 0 && (
         <details open={!!focusReason}>
-          <summary>Câu xử lý từ chối</summary>
-          {groups.map(([r, xs]) => (
-            <div key={r} className="snippet-group">
-              <strong className="small">{LOST_REASON_LABEL[r]}</strong>
-              <ul className="snippets">
-                {xs.map((o) => (
-                  <li key={o.title}>
-                    <div className="row space-between nowrap">
-                      <span className="small">
-                        <strong>{o.title}</strong>
-                      </span>
-                      <CopyButton text={o.text} />
-                    </div>
-                    <div className="small muted">{o.text}</div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <summary>Khách từ chối — trả lời thế nào ({playbook.length})</summary>
+          <input
+            className="input-sm search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Khách nói gì? VD: đắt, hợp đồng, độc quyền"
+            aria-label="Tìm câu trả lời"
+          />
+          {!f && focusTopics.length > 0 && (
+            <p className="small muted">Đang hiện chủ đề hợp với lý do “{LOST_REASON_LABEL[focusReason!]}”. Gõ để tìm câu khác.</p>
+          )}
+          <ul className="snippets">
+            {matched.map((o) => (
+              <li key={o.title}>
+                <div className="row space-between nowrap">
+                  <span className="small">
+                    <strong>{o.title}</strong>
+                  </span>
+                  <CopyButton text={o.short ?? o.text} />
+                </div>
+                <div className="small">{o.short ?? o.text}</div>
+                {o.check && <div className="small check">Cần kiểm tra: {o.check}</div>}
+              </li>
+            ))}
+            {matched.length === 0 && <li className="small muted">Không có câu khớp.</li>}
+          </ul>
+          <Link className="small" to="/library/objections">
+            Mở kho Xử lý từ chối (bản đầy đủ để gửi email) →
+          </Link>
         </details>
       )}
     </div>
