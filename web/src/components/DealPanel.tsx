@@ -8,6 +8,7 @@ import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtDate } from "../lib/format";
 import {
   BILLING_LABEL,
+  addressFor,
   REASON_TOPICS,
   foldVi,
   objectionTopic,
@@ -1117,16 +1118,6 @@ function Helpers({
 }
 
 // ------------------------------------------------------------------ Nội dung soạn sẵn cho bước hiện tại
-const VN_SURNAMES = new Set(
-  "nguyen tran le pham hoang huynh phan vu vo dang bui do ho ngo duong ly dinh dao mai truong lam to ha ta cao luong luu chau thai quach kieu tang than chu diep phung tu trieu la doan vuong giang khong ton hua".split(" "),
-);
-/** Tên để xưng hô: “Nguyễn Thị Lan” → “Lan”; tên nước ngoài “John Smith” → “John”. */
-function firstName(full: string | null): string {
-  const parts = (full ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return parts[0] ?? "";
-  return VN_SURNAMES.has(foldVi(parts[0])) ? parts[parts.length - 1] : parts[0];
-}
-
 function Compose({
   deal,
   step,
@@ -1148,15 +1139,21 @@ function Compose({
 }) {
   const withEmail = contacts.filter((c) => c.email);
   const [contactId, setContactId] = useState((withEmail[0] ?? contacts[0])?.id ?? "");
+  // Danh bạ tải sau khung soạn: chọn người nhận mặc định khi có dữ liệu.
+  useEffect(() => {
+    if (!contacts.some((c) => c.id === contactId)) setContactId((withEmail[0] ?? contacts[0])?.id ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts]);
   const contact = contacts.find((c) => c.id === contactId) ?? null;
   const pl = playlists.find((p) => !p.segments?.length || (deal.segment && p.segments.includes(deal.segment)));
+  const addr = addressFor(contact?.full_name ?? null, deal.company_name);
   const vars: Record<string, string> = {
-    ten: firstName(contact?.full_name ?? null) || "[tên]",
+    ...addr,
     cong_ty: deal.company_name,
     playlist: pl ? pl.url : "[link playlist — thêm ở trang Nhạc mẫu]",
     nguoi_gui: sender.name || "[Tên bạn]",
     chuc_danh: sender.title,
-    cong_ty_ban: sender.company || "Bigfish Agency",
+    cong_ty_ban: sender.company || "Epidemic Sound tại Việt Nam",
     sdt: sender.phone,
     chu_ky: signature(sender),
   };
@@ -1210,7 +1207,7 @@ function Compose({
       )}
       <label>
         {ch === "call" ? "Kịch bản" : "Nội dung"}
-        <textarea rows={ch === "email" ? 10 : 5} value={body} onChange={(e) => setBody(e.target.value)} />
+        <textarea rows={ch === "email" ? 18 : 6} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
       {body.includes("[") && <p className="small muted">Điền các chỗ trong ngoặc vuông [ … ] trước khi gửi.</p>}
       <div className="row">

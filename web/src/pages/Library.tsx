@@ -38,7 +38,9 @@ import { DealPanel } from "../components/DealPanel";
 import { confirmDialog } from "../components/dialog";
 
 const VARS: [string, string][] = [
-  ["{ten}", "tên người nhận"],
+  ["{xung_ho}", "lời chào: chị Lan / anh Minh / Quý Công ty …"],
+  ["{anh_chi}", "anh / chị (đoán từ tên đệm Thị, Văn)"],
+  ["{ten}", "tên gọi của người nhận"],
   ["{cong_ty}", "tên công ty khách"],
   ["{playlist}", "link playlist hợp nhóm khách"],
   ["{nguoi_gui}", "tên bạn"],
@@ -82,6 +84,8 @@ export function EmailLibraryPage() {
 
   const sample: Record<string, string> = {
     ten: "Minh",
+    anh_chi: "anh",
+    xung_ho: "anh Minh",
     cong_ty: segment === "mcn" ? "Yeah1 Network" : segment === "brand" ? "Vinamilk" : "HTV9",
     playlist: "https://www.epidemicsound.com/playlists/…",
     nguoi_gui: sender.name || "[Tên bạn]",
@@ -161,25 +165,25 @@ export function EmailLibraryPage() {
         }
       />
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
-      {isAdmin && cadence[0]?.channel !== "email" && (
+      {isAdmin && !templates.some((t) => (t as MessageTemplate & { version?: number }).version === 4) && (
         <div className="card start-session">
           <div>
-            <strong>Có bộ email mẫu mới (v3)</strong>
+            <strong>Có bộ email mẫu mới (bản trang trọng)</strong>
             <div className="small muted">
-              Bước 1 là email mở lời; email ngắn hơn, mở đầu bằng điều về chính khách hàng, mỗi email chỉ xin một việc dễ trả lời. App
-              chưa tự cập nhật vì bạn đã sửa lịch hoặc mẫu — bấm để thay bằng bộ mới (các mẫu bạn đã sửa sẽ bị thay).
+              “Kính gửi chị Lan”, giới thiệu người gửi và Epidemic Sound, 3 lợi ích theo nhóm khách, đề xuất buổi trao đổi, chữ ký
+              đầy đủ; bước 1 là email. App chưa tự cập nhật vì bạn đã sửa mẫu — bấm để thay (các mẫu bạn đã sửa sẽ bị thay).
             </div>
           </div>
           <button
             type="button"
             className="btn-primary"
             onClick={async () => {
-              if (!(await confirmDialog({ title: "Thay bằng bộ email mẫu v3?", message: "Lịch 19 bước và toàn bộ nội dung soạn sẵn sẽ được thay.", confirmLabel: "Thay" }))) return;
-              const { error } = await supabase.rpc("apply_sales_defaults_v3");
+              if (!(await confirmDialog({ title: "Thay bằng bộ email mẫu mới?", message: "Lịch 19 bước và toàn bộ nội dung soạn sẵn sẽ được thay.", confirmLabel: "Thay" }))) return;
+              const { error } = await supabase.rpc("apply_sales_defaults");
               if (error) setMsg({ kind: "error", text: error.message });
               else {
                 await reload();
-                setMsg({ kind: "ok", text: "Đã dùng bộ email mẫu v3." });
+                setMsg({ kind: "ok", text: "Đã dùng bộ email mẫu mới." });
               }
             }}
           >

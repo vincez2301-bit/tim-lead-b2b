@@ -20,6 +20,10 @@ select pg_temp.ok((select e->>'channel' from public.settings s, jsonb_array_elem
 select pg_temp.ok((select jsonb_array_length(value) from public.settings where key = 'message_templates') = 20, 'đủ 20 mẫu');
 select pg_temp.ok((select count(*) from public.settings s, jsonb_array_elements(s.value) e
                    where s.key = 'message_templates' and e->>'channel' = 'email' and e ? 'subject') = 12, 'email nào cũng có tiêu đề');
+select pg_temp.ok((select bool_and((e->>'version')::int = 4) from public.settings s, jsonb_array_elements(s.value) e
+                   where s.key = 'message_templates'), 'đang dùng bộ v4');
+select pg_temp.ok((select bool_and(e->>'body' like 'Kính gửi {xung_ho},%') from public.settings s, jsonb_array_elements(s.value) e
+                   where s.key = 'message_templates' and e->>'channel' = 'email'), 'email mở đầu trang trọng');
 
 
 -- apply_sales_defaults_v3: chỉ admin.
@@ -30,15 +34,15 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000005b1","role":"authenticated"}', true);
 do $$ begin
   begin
-    perform public.apply_sales_defaults_v3();
+    perform public.apply_sales_defaults();
     raise exception 'FAIL: user thường áp dụng được';
   exception when insufficient_privilege then null;
   end;
 end $$;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000005a1","role":"authenticated"}', true);
-select public.apply_sales_defaults_v3();
+select public.apply_sales_defaults();
 reset role;
-select pg_temp.ok((select value->0->>'channel' from public.settings where key = 'cadence') = 'email', 'admin áp dụng lại bộ v3');
+select pg_temp.ok((select value->0->>'channel' from public.settings where key = 'cadence') = 'email', 'admin áp dụng lại bộ mới nhất');
 
 rollback;
 \o

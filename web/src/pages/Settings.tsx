@@ -432,6 +432,7 @@ function SenderForm({ isAdmin }: { isAdmin: boolean }) {
         {field("title", "Chức danh", "Licensing Manager")}
         {field("company", "Công ty", "Epidemic Sound tại Việt Nam")}
         {field("phone", "Số điện thoại (Zalo / WhatsApp)", "+84 …")}
+        {field("email", "Email", "ten@epidemicsound.com")}
       </div>
       <div className="row">
         <button

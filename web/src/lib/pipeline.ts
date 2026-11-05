@@ -116,8 +116,8 @@ export const STAGE_LABEL: Record<Stage, string> = {
   nurture: "Nuôi dưỡng",
 };
 export const STAGE_HINT: Record<Stage, string> = {
-  new: "Chưa đánh giá. Đừng liên hệ trước khi đánh giá.",
-  research: "Kiểm tra 8 tiêu chí, tìm người quyết định, chọn hạng A/B/C.",
+  new: "Chưa liên hệ. Việc đầu tiên: gửi email mở lời.",
+  research: "Chưa liên hệ. Gửi email mở lời; đánh giá 8 tiêu chí khi đã trao đổi (không bắt buộc).",
   outreach: "Đang chạy lịch điểm chạm 1–12.",
   connected: "Khách đã trả lời — hẹn buổi tìm hiểu nhu cầu.",
   meeting: "Tìm hiểu nhu cầu, demo.",
@@ -491,6 +491,7 @@ export interface Sender {
   title: string;
   company: string;
   phone: string;
+  email: string;
 }
 
 export function getTemplates(s: SettingsMap): MessageTemplate[] {
@@ -499,7 +500,7 @@ export function getTemplates(s: SettingsMap): MessageTemplate[] {
 }
 export function getSender(s: SettingsMap): Sender {
   const v = (s["sender"] ?? {}) as Partial<Sender>;
-  return { name: v.name ?? "", title: v.title ?? "", company: v.company ?? "Bigfish Agency", phone: v.phone ?? "" };
+  return { name: v.name ?? "", title: v.title ?? "", company: v.company ?? "Epidemic Sound tại Việt Nam", phone: v.phone ?? "", email: v.email ?? "" };
 }
 
 /** Mẫu cho một bước: ưu tiên đúng nhóm khách, hãng phim dùng mẫu production house, sau đó mẫu chung. */
@@ -515,8 +516,33 @@ export function pickTemplate(list: MessageTemplate[], step: number, segment: Seg
 }
 
 export function signature(sd: Sender): string {
-  const phone = sd.phone ? `${sd.phone} (Zalo / WhatsApp)` : "";
-  return [sd.name || "[Tên bạn]", [sd.title, sd.company].filter(Boolean).join(" – "), phone].filter(Boolean).join("\n");
+  return [
+    sd.name || "[Tên bạn]",
+    [sd.title, sd.company].filter(Boolean).join(" – "),
+    sd.phone ? `Điện thoại / Zalo / WhatsApp: ${sd.phone}` : "",
+    sd.email ? `Email: ${sd.email}` : "",
+    "www.epidemicsound.com",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+const VN_SURNAMES = new Set(
+  "nguyen tran le pham hoang huynh phan vu vo dang bui do ho ngo duong ly dinh dao mai truong lam to ha ta cao luong luu chau thai quach kieu tang than chu diep phung tu trieu la doan vuong giang khong ton hua".split(" "),
+);
+
+/**
+ * Cách xưng hô với người nhận: tên gọi (“Nguyễn Thị Lan” → “Lan”), anh/chị (đoán từ tên đệm Thị/Văn),
+ * và lời chào đầy đủ (“chị Lan”; không có tên thì “Quý Công ty …”).
+ */
+export function addressFor(fullName: string | null, company: string): { ten: string; anh_chi: string; xung_ho: string } {
+  const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return { ten: "[tên]", anh_chi: "anh/chị", xung_ho: `Quý Công ty ${company}` };
+  const folded = parts.map(foldVi);
+  const vn = folded.length > 1 && VN_SURNAMES.has(folded[0]);
+  const ten = vn ? parts[parts.length - 1] : parts[0];
+  const anh_chi = folded.slice(1, -1).includes("thi") ? "chị" : folded.slice(1, -1).includes("van") ? "anh" : "anh/chị";
+  return { ten, anh_chi, xung_ho: `${anh_chi} ${ten}` };
 }
 
 export function renderTemplate(text: string, vars: Record<string, string>): string {
