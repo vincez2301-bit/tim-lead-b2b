@@ -7,6 +7,7 @@ import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg } from "../lib/format";
 import { getPlaylists, type Playlist } from "../lib/pipeline";
 import { Badge, EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
+import { SafeLink } from "../components/SafeLink";
 
 interface Track {
   id: string;
@@ -24,6 +25,7 @@ interface Theme {
   title: string;
   segments: Segment[];
   description?: string;
+  official?: { title: string; url: string };
   tracks: Track[];
 }
 
@@ -92,19 +94,25 @@ export function MusicPage() {
     });
   }
 
-  async function savePlaylist(theme: Theme, url: string) {
-    const clean = url.trim();
-    if (!/^https?:\/\//.test(clean)) return setError("Link playlist phải bắt đầu bằng https://");
-    const others = saved.filter((p) => p.title !== theme.title);
-    const value: Playlist[] = [
-      ...others,
-      { title: theme.title, url: clean, segments: theme.segments, note: theme.description },
-    ];
+  async function writePlaylists(value: Playlist[], msg: string) {
+    setError(null);
     const { error } = await supabase.from("settings").upsert({ key: "playlists", value });
     if (error) return setError(error.message);
-    setInfo(`Đã lưu playlist "${theme.title}" — sẽ hiện trong khung deal của nhóm ${theme.segments.map((s) => SEGMENT_LABEL[s]).join(", ")}.`);
+    setInfo(msg);
     await reload();
   }
+
+  async function upsertPlaylist(p: Playlist) {
+    const url = p.url.trim();
+    if (!/^https?:\/\//.test(url)) return setError("Link playlist phải bắt đầu bằng https://");
+    if (!p.title.trim()) return setError("Cần đặt tên playlist.");
+    const value = [...saved.filter((x) => x.title !== p.title.trim()), { ...p, title: p.title.trim(), url }];
+    const groups = p.segments?.length ? p.segments.map((s) => SEGMENT_LABEL[s]).join(", ") : "mọi nhóm khách";
+    await writePlaylists(value, `Đã lưu playlist "${p.title.trim()}" — sẽ hiện trong khung deal của ${groups}.`);
+  }
+
+  const savePlaylist = (theme: Theme, url: string) =>
+    upsertPlaylist({ title: theme.title, url, segments: theme.segments, note: theme.description });
 
   const shown = (themes ?? []).filter((t) => !segment || t.segments.includes(segment));
   return (
@@ -115,6 +123,13 @@ export function MusicPage() {
       />
       {error && <Notice kind="error">{error}</Notice>}
       {info && <Notice kind="ok">{info}</Notice>}
+      <Library
+        saved={saved}
+        canEdit={isAdmin}
+        onAdd={(p) => void upsertPlaylist(p)}
+        onRemove={(title) => void writePlaylists(saved.filter((x) => x.title !== title), `Đã xoá playlist "${title}".`)}
+      />
+      <h2 className="section-title">Danh sách đã lọc theo chủ đề</h2>
       <div className="chips seg-filter">
         <button type="button" className={segment === "" ? "chip on" : "chip"} onClick={() => setSegment("")}>
           Tất cả
@@ -203,6 +218,18 @@ function ThemeCard({
           <Copy aria-hidden="true" /> {copied ? "Đã chép" : "Chép danh sách bài"}
         </button>
       </div>
+      {theme.official && (
+        <div className="official row space-between">
+          <span className="small">
+            Playlist chính thức trên Epidemic Sound: <SafeLink href={theme.official.url}>{theme.official.title}</SafeLink>
+          </span>
+          {canSave && (
+            <button type="button" className="btn-link small" onClick={() => setUrl(theme.official!.url)}>
+              Dùng link này
+            </button>
+          )}
+        </div>
+      )}
       <ol className="tracks">
         {theme.tracks.map((x) => {
           const off = excluded.has(x.id);
@@ -248,6 +275,95 @@ function ThemeCard({
           {saved ? "Cập nhật" : "Lưu vào thư viện"}
         </button>
       </form>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Thư viện playlist đã lưu (dùng trong khung deal)
+function Library({
+  saved,
+  canEdit,
+  onAdd,
+  onRemove,
+}: {
+  saved: Playlist[];
+  canEdit: boolean;
+  onAdd: (p: Playlist) => void;
+  onRemove: (title: string) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [segs, setSegs] = useState<Segment[]>([]);
+  return (
+    <div className="card">
+      <h2>
+        Thư viện playlist <span className="count">{saved.length}</span>
+      </h2>
+      <p className="small muted">
+        Playlist ở đây hiện trong mục “Playlist gợi ý” của khung deal, lọc theo nhóm khách. Ưu tiên playlist chính thức trên trang
+        chủ Epidemic Sound: mở playlist → Chia sẻ → chép link → dán vào đây.
+      </p>
+      {saved.length > 0 && (
+        <ul className="snippets">
+          {saved.map((p) => (
+            <li key={p.title} className="row space-between nowrap">
+              <span className="small">
+                <SafeLink href={p.url}>{p.title}</SafeLink>{" "}
+                <span className="muted">
+                  · {p.segments?.length ? p.segments.map((x) => SEGMENT_LABEL[x]).join(", ") : "mọi nhóm"}
+                </span>
+              </span>
+              {canEdit && (
+                <button type="button" className="btn-link small" onClick={() => onRemove(p.title)}>
+                  Xoá
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {canEdit && (
+        <form
+          className="stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onAdd({ title, url, segments: segs });
+            setTitle("");
+            setUrl("");
+            setSegs([]);
+          }}
+        >
+          <div className="form-grid">
+            <label>
+              Tên playlist
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="vd. Epidemic – Cinematic Documentary" />
+            </label>
+            <label>
+              Link
+              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.epidemicsound.com/…" />
+            </label>
+          </div>
+          <div className="chips" role="group" aria-label="Nhóm khách">
+            {SEGMENTS.map((x) => (
+              <button
+                key={x}
+                type="button"
+                className={segs.includes(x) ? "chip on" : "chip"}
+                aria-pressed={segs.includes(x)}
+                onClick={() => setSegs((v) => (v.includes(x) ? v.filter((y) => y !== x) : [...v, x]))}
+              >
+                {SEGMENT_LABEL[x]}
+              </button>
+            ))}
+          </div>
+          <div className="row">
+            <button type="submit" className="btn-primary" disabled={!title.trim() || !url.trim()}>
+              Thêm vào thư viện
+            </button>
+            <span className="small muted">Không chọn nhóm = hiện cho mọi nhóm khách.</span>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -1765,3 +1765,13 @@ ol.tracks li.off strong {
     display: none;
   }
 }
+
+.section-title {
+  margin: 1.5rem 0 0.75rem;
+}
+.official {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
