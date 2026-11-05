@@ -34,8 +34,8 @@ interface Task {
 }
 
 export function TodayPage() {
-  const { session } = useAuth();
-  const { settings } = useSettings();
+  const { session, isAdmin } = useAuth();
+  const { settings, save } = useSettings();
   const cadence = getCadence(settings);
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState<DealRow[] | null>(null);
@@ -43,11 +43,19 @@ export function TodayPage() {
   const [error, setError] = useState<string | null>(null);
   const [mine, setMine] = useState(() => rememberedFilter("today.mine") === "1");
   useEffect(() => rememberFilter("today.mine", mine ? "1" : ""), [mine]);
-  const [perDay, setPerDay] = useState(() => {
+  // Số lead mới mỗi ngày: lưu trong settings.daily_digest để email nhắc việc dùng cùng con số.
+  const digestCfg = (settings["daily_digest"] ?? {}) as { new_per_day?: number };
+  const savedPerDay = Number.isInteger(digestCfg.new_per_day) && digestCfg.new_per_day! > 0 ? digestCfg.new_per_day! : null;
+  const [localPerDay, setLocalPerDay] = useState(() => {
     const n = Number(rememberedFilter("today.newPerDay"));
     return Number.isInteger(n) && n > 0 ? n : DEFAULT_NEW_PER_DAY;
   });
-  useEffect(() => rememberFilter("today.newPerDay", String(perDay)), [perDay]);
+  const perDay = savedPerDay ?? localPerDay;
+  const setPerDay = (n: number) => {
+    setLocalPerDay(n);
+    rememberFilter("today.newPerDay", String(n));
+    if (isAdmin) void save("daily_digest", { ...(settings["daily_digest"] as object | undefined), new_per_day: n });
+  };
   const [showAllNew, setShowAllNew] = useState(false);
   const openId = params.get("deal");
   const [queue, setQueue] = useState<string[] | null>(null);

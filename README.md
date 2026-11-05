@@ -20,6 +20,7 @@ Dùng chung cho cả nhóm (ai cũng xem và cập nhật được deal của nh
 - **Màn hình:** Hôm nay (việc trong ngày + lead mới gửi email, làm lần lượt), Pipeline (mặc định là danh sách “việc tiếp theo” theo 5 nhóm: Chưa liên hệ, Đang tiếp cận, Đang trao đổi, Đã ký, Tạm dừng; bảng kéo thả là tuỳ chọn),
   Kho nội dung (email & tin nhắn mẫu, xử lý từ chối, nhạc mẫu), Tìm khách mới (lượt tìm → kết quả → phân tích → đưa vào Pipeline),
   Nhập file (JSON hoặc CSV; chạy lại cùng file không nhân đôi). Bảng: `deals`, `activities`, `run_companies`, view `deal_board`.
+- **Email nhắc việc mỗi sáng:** Edge Function `daily_digest` (Resend) được `pg_cron` gọi mỗi giờ; chỉ gửi khi đã bật, đúng giờ hẹn (giờ Việt Nam) và mỗi ngày một lần (`digest_log`). Bật ở Cài đặt → Email nhắc việc mỗi sáng.
 - Kiến trúc, chỗ trùng lặp và cách giảm nặng: [docs/kien-truc.md](docs/kien-truc.md).
 - File lead có dữ liệu cá nhân: **không commit vào repo** (repo công khai).
 
@@ -70,6 +71,7 @@ Cần [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/gett
 
    ```bash
    npx supabase secrets set SERPER_API_KEY=xxx YOUTUBE_API_KEY=yyy
+   # Tuỳ chọn — email nhắc việc mỗi sáng (Resend, gói miễn phí): RESEND_API_KEY=re_...  (DIGEST_FROM nếu đã xác minh tên miền)
    ```
 
 4. Deploy các function. `verify_jwt = true` đã khai báo trong `config.toml`.

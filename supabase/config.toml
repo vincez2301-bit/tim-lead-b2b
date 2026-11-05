@@ -74,3 +74,8 @@ verify_jwt = true
 
 [functions.export]
 verify_jwt = true
+
+# Email nhắc việc mỗi sáng: pg_cron gọi không kèm JWT. Function tự kiểm tra: chỉ gửi khi đã bật,
+# đúng giờ hẹn và mỗi ngày một lần; “Gửi thử” thì bắt buộc JWT của admin (kiểm tra trong code).
+[functions.daily_digest]
+verify_jwt = false

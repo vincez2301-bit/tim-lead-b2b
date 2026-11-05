@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { supabase } from "../lib/supabase";
+import { SUPABASE_URL, supabase } from "../lib/supabase";
+import { callFn } from "../lib/api";
+import { SafeLink } from "../components/SafeLink";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import type { Profile, Role } from "../lib/db-types";
@@ -488,6 +490,139 @@ function BackupSection() {
   );
 }
 
+interface DigestSetting {
+  enabled?: boolean;
+  hour?: number;
+  recipients?: string[];
+  new_per_day?: number;
+  app_url?: string;
+  function_url?: string;
+}
+
+function DigestSection({ isAdmin }: { isAdmin: boolean }) {
+  const { settings, save } = useSettings();
+  const cur = (settings["daily_digest"] ?? {}) as DigestSetting;
+  const [enabled, setEnabled] = useState(cur.enabled === true);
+  const [hour, setHour] = useState(Number.isInteger(cur.hour) ? (cur.hour as number) : 7);
+  const [recipients, setRecipients] = useState((cur.recipients ?? []).join(", "));
+  const [msg, setMsg] = useState<{ kind: "ok" | "error" | "info"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [last, setLast] = useState<{ day: string; sent_at: string; tasks: number; recipients: string[] } | null>(null);
+
+  useEffect(() => {
+    void supabase
+      .from("digest_log")
+      .select("*")
+      .order("day", { ascending: false })
+      .limit(1)
+      .then(({ data }) => setLast((data?.[0] as typeof last) ?? null));
+  }, []);
+
+  async function persist(): Promise<boolean> {
+    const list = recipients.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+    const bad = list.filter((x) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
+    if (bad.length) {
+      setMsg({ kind: "error", text: `Email không hợp lệ: ${bad.join(", ")}` });
+      return false;
+    }
+    const err = await save("daily_digest", {
+      ...cur,
+      enabled,
+      hour,
+      recipients: list.slice(0, 5),
+      app_url: window.location.origin,
+      function_url: `${SUPABASE_URL}/functions/v1/daily_digest`,
+    });
+    if (err) setMsg({ kind: "error", text: err });
+    else
+      setMsg({
+        kind: "ok",
+        text: enabled ? `Đã lưu. Email nhắc việc sẽ đến khoảng ${hour}:05 mỗi sáng (giờ Việt Nam).` : "Đã lưu. Email nhắc việc đang tắt.",
+      });
+    return !err;
+  }
+
+  async function sendTest() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      if (!(await persist())) return;
+      const r = await callFn<{ status: string; to: string[] }>("daily_digest", { test: true });
+      setMsg({ kind: "ok", text: `Đã gửi thử tới ${r.to.join(", ")}. Kiểm tra hộp thư, cả mục Spam / Quảng cáo.` });
+    } catch (e) {
+      const t = errMsg(e);
+      setMsg({
+        kind: "error",
+        text: /RESEND_API_KEY/.test(t)
+          ? "Chưa có khoá Resend. Làm theo 4 bước hướng dẫn bên dưới rồi bấm Gửi thử lại."
+          : /own email|testing emails/i.test(t)
+            ? "Resend chỉ cho gửi tới email bạn đã dùng để đăng ký Resend. Nhập đúng email đó vào ô Người nhận, hoặc xác minh tên miền trên Resend."
+            : t,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Email nhắc việc mỗi sáng</h2>
+      <p className="small muted">
+        Mỗi sáng nhận một email: việc đến hạn, lead mới cần gửi email mở lời, khách sắp gia hạn — bấm tên khách là mở đúng khách đó trong
+        app.
+      </p>
+      <div className="form-grid">
+        <label className="checkbox inline digest-toggle">
+          <input type="checkbox" checked={enabled} disabled={!isAdmin} onChange={(e) => setEnabled(e.target.checked)} />
+          Bật email nhắc việc
+        </label>
+        <label>
+          Giờ gửi (giờ Việt Nam)
+          <select value={hour} disabled={!isAdmin} onChange={(e) => setHour(Number(e.target.value))}>
+            {[5, 6, 7, 8, 9, 10].map((h) => (
+              <option key={h} value={h}>
+                {h}:05
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Người nhận (để trống = email đăng nhập của admin)
+          <input value={recipients} disabled={!isAdmin} onChange={(e) => setRecipients(e.target.value)} placeholder="ten@congty.com" />
+        </label>
+      </div>
+      <div className="row">
+        <button type="button" className="btn-primary" disabled={!isAdmin || busy} onClick={() => void persist()}>
+          Lưu
+        </button>
+        <button type="button" disabled={!isAdmin || busy} onClick={() => void sendTest()}>
+          {busy ? "Đang gửi…" : "Gửi thử ngay"}
+        </button>
+        {last && (
+          <span className="small muted">
+            Lần gửi gần nhất: {fmtDate(last.sent_at)} · {last.tasks} việc · tới {last.recipients.join(", ")}
+          </span>
+        )}
+      </div>
+      {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+      <details className="digest-help">
+        <summary className="small">Cài đặt lần đầu (khoảng 5 phút)</summary>
+        <ol className="small">
+          <li>
+            Đăng ký tài khoản miễn phí tại <SafeLink href="https://resend.com/signup">resend.com</SafeLink> bằng chính email bạn muốn nhận
+            nhắc việc. Gói miễn phí chỉ gửi tới email đã đăng ký, tối đa 100 email/ngày — đủ cho việc này.
+          </li>
+          <li>Trong Resend: API Keys → Create API Key (quyền Sending access) → chép khoá bắt đầu bằng re_.</li>
+          <li>
+            Trong Supabase: Edge Functions → Secrets → Add new secret, tên <code>RESEND_API_KEY</code>, giá trị là khoá vừa chép → Save.
+          </li>
+          <li>Quay lại đây: nhập email ở ô Người nhận (đúng email đăng ký Resend), bật, chọn giờ, bấm Gửi thử ngay.</li>
+        </ol>
+      </details>
+    </div>
+  );
+}
+
 function GeneralSettings() {
   const { isAdmin, profile } = useAuth();
   const { rows, settings, loading, error, reload } = useSettings();
@@ -505,6 +640,7 @@ function GeneralSettings() {
       {!isAdmin && <Notice kind="info">Chỉ admin được sửa cài đặt. Vai trò của bạn: {profile?.role ?? "user"}.</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       <SenderForm isAdmin={isAdmin} />
+      <DigestSection isAdmin={isAdmin} />
       <BackupSection />
       <MfaSection />
       {isAdmin && <UsersSection />}

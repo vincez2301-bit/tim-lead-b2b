@@ -90,7 +90,7 @@ phần riêng ngành “Dịch vụ B2B”:
 | TH-03, TH-05 | Sao lưu, xuất Excel | **Mới thêm**: Cài đặt → Sao lưu dữ liệu (JSON đầy đủ, CSV pipeline có BOM cho Excel) |
 | Bài học “ô tiền” | Ô số của trình duyệt đọc sai “10.206” | **Đã sửa**: ô ARR đọc được 10.206 / 10,206 / $10,206 và hiện lại số đã hiểu |
 | Bài học “ngày và múi giờ” | Ngày lùi một ngày ở giờ Việt Nam | Đã đúng: mọi ngày tính theo giờ máy (`isoDate` bù múi giờ) |
-| VC-05 | Nhắc qua email / thông báo | Chưa có: chỉ hiện trong app |
+| VC-05 | Nhắc qua email / thông báo | **Đã thêm**: email nhắc việc mỗi sáng (`daily_digest` + `pg_cron`, gửi qua Resend) |
 | BG-01, BG-02, B2B-01 | Danh mục gói, báo giá PDF | Chưa có |
 | TH-02 | Đính kèm file (hợp đồng, đề xuất) | Chưa có |
 | MK-01 | Nhật ký đồng ý nhận tin | Chưa có; đang có danh sách loại trừ và xoá dữ liệu theo yêu cầu |
