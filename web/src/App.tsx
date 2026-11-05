@@ -11,6 +11,7 @@ const page = <K extends string>(load: () => Promise<Record<K, React.ComponentTyp
 
 const TodayPage = page(() => import("./pages/Today"), "TodayPage");
 const PipelinePage = page(() => import("./pages/Pipeline"), "PipelinePage");
+const ResultsPage = page(() => import("./pages/Results"), "ResultsPage");
 const EmailLibraryPage = page(() => import("./pages/Library"), "EmailLibraryPage");
 const ObjectionLibraryPage = page(() => import("./pages/Library"), "ObjectionLibraryPage");
 const MusicPage = page(() => import("./pages/Music"), "MusicPage");
@@ -41,6 +42,7 @@ export function App() {
         <Route index element={<TodayPage />} />
         <Route path="today" element={<Navigate to="/" replace />} />
         <Route path="pipeline" element={<PipelinePage />} />
+        <Route path="results" element={<ResultsPage />} />
         <Route path="library/emails" element={<EmailLibraryPage />} />
         <Route path="library/objections" element={<ObjectionLibraryPage />} />
         <Route path="music" element={<MusicPage />} />

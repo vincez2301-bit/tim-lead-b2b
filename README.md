@@ -17,7 +17,7 @@ Dùng chung cho cả nhóm (ai cũng xem và cập nhật được deal của nh
   Ưu tiên nhóm khách: đài truyền hình → MCN → production house → hãng phim → nhãn hàng.
 - **19 điểm chạm** (`settings.cadence`): chặng A 12 bước tiếp cận đa kênh bắt đầu bằng email mở lời (rồi LinkedIn, gọi, Zalo), chặng B 7 bước chuyển đổi. Lead mới không cần đánh giá trước: gửi email đầu tiên là khách sang “Đang tiếp cận”; mỗi ngày Hôm nay đưa vào 2 lead ưu tiên nhất (đổi được).
   Ghi một điểm chạm thì app tự đặt việc kế tiếp; khách trả lời thì chuyển sang "Đã phản hồi".
-- **Màn hình:** Hôm nay (việc trong ngày + lead mới gửi email, làm lần lượt), Pipeline (mặc định là danh sách “việc tiếp theo” theo 5 nhóm: Chưa liên hệ, Đang tiếp cận, Đang trao đổi, Đã ký, Tạm dừng; bảng kéo thả là tuỳ chọn),
+- **Màn hình:** Hôm nay (việc trong ngày + lead mới gửi email, làm lần lượt), Kết quả (tỷ lệ trả lời theo nhóm khách, kênh, số lần liên hệ, theo tuần), Pipeline (mặc định là danh sách “việc tiếp theo” theo 5 nhóm: Chưa liên hệ, Đang tiếp cận, Đang trao đổi, Đã ký, Tạm dừng; bảng kéo thả là tuỳ chọn),
   Kho nội dung (email & tin nhắn mẫu, xử lý từ chối, nhạc mẫu), Tìm khách mới (lượt tìm → kết quả → phân tích → đưa vào Pipeline),
   Nhập file (JSON hoặc CSV; chạy lại cùng file không nhân đôi). Bảng: `deals`, `activities`, `run_companies`, view `deal_board`.
 - **Email nhắc việc mỗi sáng:** Edge Function `daily_digest` (Resend) được `pg_cron` gọi mỗi giờ; chỉ gửi khi đã bật, đúng giờ hẹn (giờ Việt Nam) và mỗi ngày một lần (`digest_log`). Bật ở Cài đặt → Email nhắc việc mỗi sáng.

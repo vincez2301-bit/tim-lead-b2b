@@ -10,6 +10,7 @@ end $$;
 select pg_temp.ok((select value->0->>'channel' from public.settings where key = 'cadence') = 'email', 'bước 1 là email');
 select pg_temp.ok((select (value->0->>'step')::int from public.settings where key = 'cadence') = 1, 'số bước vẫn bắt đầu từ 1');
 select pg_temp.ok((select value->1->>'channel' from public.settings where key = 'cadence') = 'linkedin', 'bước 2 là LinkedIn');
+select pg_temp.ok((select value->11->>'title' from public.settings where key = 'cadence') like 'Email: xin phép tạm dừng%', 'lịch khớp bộ email v4');
 select pg_temp.ok(jsonb_array_length((select value from public.settings where key = 'cadence')) = 19, 'vẫn đủ 19 bước');
 select pg_temp.ok((select bool_and(e->>'channel' = 'email') from public.settings s, jsonb_array_elements(s.value) e
                    where s.key = 'message_templates' and (e->>'step')::int = 1), 'mẫu bước 1 đều là email');

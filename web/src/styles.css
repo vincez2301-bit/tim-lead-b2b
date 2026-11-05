@@ -2505,3 +2505,18 @@ table.next-list td {
   border-color: var(--orange-fg);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange-fg) 20%, transparent);
 }
+
+/* nút khách đã trả lời */
+.reply-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--radius);
+}
+.reply-bar .btn-sm svg {
+  width: 14px;
+  height: 14px;
+}

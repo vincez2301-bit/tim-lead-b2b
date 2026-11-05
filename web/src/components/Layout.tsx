@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router";
 import {
   Building2,
   CalendarCheck,
+  ChartColumn,
   Download,
   Kanban,
   LogOut,
@@ -37,6 +38,7 @@ const NAV: { title: string; items: NavItem[] }[] = [
     items: [
       { to: "/", label: "Hôm nay", icon: CalendarCheck, end: true },
       { to: "/pipeline", label: "Pipeline", icon: Kanban },
+      { to: "/results", label: "Kết quả", icon: ChartColumn },
     ],
   },
   {

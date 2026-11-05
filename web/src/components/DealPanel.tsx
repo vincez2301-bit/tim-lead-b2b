@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { Copy, ExternalLink, X } from "lucide-react";
+import { Copy, ExternalLink, Reply, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
@@ -612,6 +612,22 @@ function TouchesTab({
           Lead mới — việc đầu tiên là gửi email mở lời bên dưới. Gửi xong bấm “✓ Đã gửi”, app chuyển khách sang Đang tiếp cận và hẹn
           bước kế tiếp. Đánh giá 8 tiêu chí (tab Đánh giá) không bắt buộc, làm khi đã trao đổi với khách.
         </Notice>
+      )}
+      {acts.length > 0 && ["outreach", "nurture"].includes(deal.stage) && (
+        <div className="reply-bar">
+          <span className="small">Khách vừa trả lời email / Zalo / điện thoại?</span>
+          <button
+            type="button"
+            className="btn-sm btn-primary"
+            disabled={busy}
+            onClick={() =>
+              void log({ channel: acts[0]?.channel ?? "email", outcome: "replied", note: "Khách trả lời", contactId: null, date: todayIso() })
+            }
+          >
+            <Reply aria-hidden="true" /> Khách đã trả lời
+          </button>
+          <span className="small muted">Trả lời để từ chối thì bấm “Khách từ chối…” ở trên.</span>
+        </div>
       )}
       {step && (
         <div className="next-step">
