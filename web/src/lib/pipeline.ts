@@ -422,7 +422,8 @@ export function pickTemplate(list: MessageTemplate[], step: number, segment: Seg
 }
 
 export function signature(sd: Sender): string {
-  return [sd.name || "[Tên bạn]", [sd.title, sd.company].filter(Boolean).join(" – "), sd.phone].filter(Boolean).join("\n");
+  const phone = sd.phone ? `${sd.phone} (Zalo / WhatsApp)` : "";
+  return [sd.name || "[Tên bạn]", [sd.title, sd.company].filter(Boolean).join(" – "), phone].filter(Boolean).join("\n");
 }
 
 export function renderTemplate(text: string, vars: Record<string, string>): string {
