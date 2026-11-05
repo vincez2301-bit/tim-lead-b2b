@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { DialogHost } from "./dialog";
+import { BigfishMark } from "./BigfishMark";
 
 interface NavItem {
   to: string;
@@ -47,7 +48,7 @@ function Brand() {
   return (
     <div className="brand">
       <span className="brand-mark" aria-hidden="true">
-        bf
+        <BigfishMark />
       </span>
       <span>
         Bigfish Lead Finder

@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { errMsg } from "../lib/format";
 import { Notice } from "../components/ui";
+import { BigfishMark } from "../components/BigfishMark";
 
 // Mục 9 / 10.2: chỉ đăng nhập — không có đăng ký công khai; magic link không tạo tài khoản mới.
 export function LoginPage() {
@@ -52,8 +53,8 @@ export function LoginPage() {
       <form className="card login-card" onSubmit={(e) => void submit(e)}>
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
-            bf
-          </span>
+        <BigfishMark />
+      </span>
           <span>
             Bigfish Lead Finder
             <small>Tìm khách hàng B2B</small>
