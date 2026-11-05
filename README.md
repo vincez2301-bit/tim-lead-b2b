@@ -17,8 +17,10 @@ Dùng chung cho cả nhóm (ai cũng xem và cập nhật được deal của nh
   Ưu tiên nhóm khách: đài truyền hình → MCN → production house → hãng phim → nhãn hàng.
 - **19 điểm chạm** (`settings.cadence`): chặng A 12 bước tiếp cận đa kênh (email, gọi, Zalo, LinkedIn), chặng B 7 bước chuyển đổi.
   Ghi một điểm chạm thì app tự đặt việc kế tiếp; khách trả lời thì chuyển sang "Đã phản hồi".
-- **Màn hình:** Việc hôm nay (việc đến hạn + lead cần đánh giá), Pipeline (bảng kéo thả + dự báo Commit / Forecast / Best case),
-  Nhập dữ liệu (JSON hoặc CSV; chạy lại cùng file không nhân đôi). Bảng: `deals`, `activities`, view `deal_board`.
+- **Màn hình:** Hôm nay (việc đến hạn + lead cần đánh giá), Pipeline (bảng kéo thả + dự báo Commit / Forecast / Best case),
+  Kho nội dung (email & tin nhắn mẫu, xử lý từ chối, nhạc mẫu), Tìm khách mới (lượt tìm → kết quả → phân tích → đưa vào Pipeline),
+  Nhập file (JSON hoặc CSV; chạy lại cùng file không nhân đôi). Bảng: `deals`, `activities`, `run_companies`, view `deal_board`.
+- Kiến trúc, chỗ trùng lặp và cách giảm nặng: [docs/kien-truc.md](docs/kien-truc.md).
 - File lead có dữ liệu cá nhân: **không commit vào repo** (repo công khai).
 
 ## Cấu trúc
@@ -90,7 +92,7 @@ Cần [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/gett
 
    Các admin sau đó được cấp quyền ngay trên màn hình **Cài đặt → Người dùng**.
 
-7. Đăng nhập app bằng tài khoản admin, vào **Tín hiệu** và **xác nhận** các tín hiệu muốn thu thập. Mọi tín hiệu khởi đầu ở trạng thái `proposed`, và pipeline không ghi observation cho tín hiệu chưa xác nhận.
+7. Đăng nhập app bằng tài khoản admin, vào **Cài đặt → Tín hiệu chấm điểm** và **xác nhận** các tín hiệu muốn thu thập. Mọi tín hiệu khởi đầu ở trạng thái `proposed`, và pipeline không ghi observation cho tín hiệu chưa xác nhận.
 
 8. Frontend: xem [web/README.md](web/README.md). Chỉ cần `VITE_SUPABASE_URL` và `VITE_SUPABASE_ANON_KEY`. Lấy cả hai ở Project Settings → API Keys: dùng **Publishable key** (`sb_publishable_...`) hoặc khoá legacy `anon`.
 

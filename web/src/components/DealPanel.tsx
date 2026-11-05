@@ -58,7 +58,7 @@ import {
   type Stage,
   type Tier,
 } from "../lib/pipeline";
-import { Badge, Notice, ScorePill, Spinner } from "./ui";
+import { Badge, CopyButton, Notice, ScorePill, Spinner } from "./ui";
 import { SafeLink, shortUrl } from "./SafeLink";
 
 interface ContactRow {
@@ -1005,24 +1005,6 @@ function RejectForm({
 }
 
 // ------------------------------------------------------------------ Câu xử lý từ chối + playlist gợi ý
-function CopyButton({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
-  return (
-    <button
-      type="button"
-      className="btn-link small"
-      onClick={() => {
-        void navigator.clipboard?.writeText(text).then(() => {
-          setDone(true);
-          setTimeout(() => setDone(false), 1500);
-        });
-      }}
-    >
-      <Copy aria-hidden="true" /> {done ? "Đã chép" : "Chép"}
-    </button>
-  );
-}
-
 function Helpers({
   segment,
   playbook,
@@ -1044,7 +1026,7 @@ function Helpers({
         <summary>Playlist gợi ý ({lists.length})</summary>
         {lists.length === 0 ? (
           <p className="small muted">
-            Chưa có playlist cho nhóm này. Thêm ở Cài đặt → Thư viện playlist (tiêu đề, link, nhóm khách).
+            Chưa có playlist cho nhóm này. Thêm link playlist ở trang Nhạc mẫu.
           </p>
         ) : (
           <ul className="snippets">
@@ -1137,7 +1119,7 @@ function Compose({
   if (!template) {
     return (
       <p className="small muted">
-        Chưa có nội dung soạn sẵn cho bước {step.step}. Thêm ở Cài đặt → Nội dung soạn sẵn.
+        Chưa có nội dung soạn sẵn cho bước {step.step}. Thêm ở Kho nội dung → Email &amp; tin nhắn mẫu.
       </p>
     );
   }
@@ -1165,7 +1147,7 @@ function Compose({
         )}
       </div>
       {contacts.length === 0 && (
-        <Notice kind="warn">Chưa có người liên hệ — thêm ở tab “Thông tin & liên hệ” hoặc chạy pipeline dữ liệu để app tự tìm từ website.</Notice>
+        <Notice kind="warn">Chưa có người liên hệ — thêm ở tab “Thông tin & liên hệ” hoặc bấm “Phân tích website” ở trang công ty để app tự tìm.</Notice>
       )}
       {ch === "email" && (
         <label>

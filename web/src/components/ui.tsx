@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { CircleAlert, CircleCheck, Inbox, Info, TriangleAlert } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { CircleAlert, CircleCheck, Copy, Inbox, Info, TriangleAlert } from "lucide-react";
 import type { CompanyStatus, EmailLabel, RunStatus } from "../lib/api-types";
 import type { SignalStatus } from "../lib/db-types";
 import { EMAIL_LABEL, RUN_STATUS_LABEL, SIGNAL_STATUS_LABEL, STATUS_LABEL } from "../lib/format";
@@ -123,5 +123,24 @@ export function Progress({ done, total }: { done: number; total: number }) {
         {done}/{total} ({pct}%)
       </span>
     </div>
+  );
+}
+
+/** Nút chép nhanh một đoạn chữ vào clipboard. */
+export function CopyButton({ text, label = "Chép", className = "btn-link small" }: { text: string; label?: string; className?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={() => {
+        void navigator.clipboard?.writeText(text).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        });
+      }}
+    >
+      <Copy aria-hidden="true" /> {done ? "Đã chép" : label}
+    </button>
   );
 }

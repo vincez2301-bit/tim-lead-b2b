@@ -79,6 +79,18 @@ export default defineConfig(({ mode, command }) => {
       // Không nhúng asset nhỏ dưới dạng data: cho JS/CSS; giữ mọi thứ là file riêng.
       assetsInlineLimit: 0,
       sourcemap: false,
+      // Tách thư viện ra chunk riêng: đổi code app không làm trình duyệt tải lại React/Supabase.
+      rollupOptions: {
+        output: {
+          manualChunks(id: string) {
+            if (!id.includes("node_modules")) return undefined;
+            if (id.includes("@supabase")) return "supabase";
+            if (/[\\/](react|react-dom|react-router|scheduler)[\\/]/.test(id)) return "react";
+            if (id.includes("lucide-react")) return "icons";
+            return undefined;
+          },
+        },
+      },
     },
     server: { port: 5173 },
   };

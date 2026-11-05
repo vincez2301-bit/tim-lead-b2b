@@ -1,27 +1,27 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import {
-  Ban,
   Building2,
   CalendarCheck,
+  Download,
   Kanban,
-  Upload,
-  LayoutDashboard,
-  ListFilter,
   LogOut,
+  Mail,
   Menu,
+  MessageSquareWarning,
   Music,
-  Radar,
-  ScrollText,
   Search,
   Settings,
+  Upload,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { SettingsProvider } from "../lib/settings";
 import { DialogHost } from "./dialog";
 import { PlayerProvider } from "./Player";
 import { BigfishMark } from "./BigfishMark";
+import { Spinner } from "./ui";
 
 interface NavItem {
   to: string;
@@ -30,21 +30,38 @@ interface NavItem {
   end?: boolean;
 }
 
-const WORK: NavItem[] = [
-  { to: "/", label: "Tổng quan", icon: LayoutDashboard, end: true },
-  { to: "/today", label: "Việc hôm nay", icon: CalendarCheck },
-  { to: "/pipeline", label: "Pipeline", icon: Kanban },
-  { to: "/search", label: "Tìm kiếm", icon: Search },
-  { to: "/companies", label: "Công ty", icon: Building2 },
-  { to: "/cohort", label: "Cohort & xuất file", icon: ListFilter },
-  { to: "/music", label: "Nhạc mẫu", icon: Music },
-];
-const ADMIN: NavItem[] = [
-  { to: "/import", label: "Nhập dữ liệu", icon: Upload },
-  { to: "/signals", label: "Tín hiệu", icon: Radar },
-  { to: "/dnc", label: "Loại trừ", icon: Ban },
-  { to: "/settings", label: "Cài đặt", icon: Settings },
-  { to: "/logs", label: "Nhật ký", icon: ScrollText },
+/** Menu theo thứ tự công việc: bán hàng mỗi ngày → nội dung để gửi → tìm khách mới → hệ thống. */
+const NAV: { title: string; items: NavItem[] }[] = [
+  {
+    title: "Bán hàng",
+    items: [
+      { to: "/", label: "Hôm nay", icon: CalendarCheck, end: true },
+      { to: "/pipeline", label: "Pipeline", icon: Kanban },
+    ],
+  },
+  {
+    title: "Kho nội dung",
+    items: [
+      { to: "/library/emails", label: "Email & tin nhắn mẫu", icon: Mail },
+      { to: "/library/objections", label: "Xử lý từ chối", icon: MessageSquareWarning },
+      { to: "/music", label: "Nhạc mẫu", icon: Music },
+    ],
+  },
+  {
+    title: "Tìm khách",
+    items: [
+      { to: "/search", label: "Tìm khách mới", icon: Search },
+      { to: "/companies", label: "Công ty", icon: Building2 },
+      { to: "/import", label: "Nhập file", icon: Upload },
+    ],
+  },
+  {
+    title: "Hệ thống",
+    items: [
+      { to: "/cohort", label: "Xuất danh sách", icon: Download },
+      { to: "/settings", label: "Cài đặt", icon: Settings },
+    ],
+  },
 ];
 
 function Brand() {
@@ -55,7 +72,7 @@ function Brand() {
       </span>
       <span>
         Bigfish Lead Finder
-        <small>Tìm khách hàng B2B</small>
+        <small>Epidemic Sound · TP.HCM</small>
       </span>
     </div>
   );
@@ -82,6 +99,7 @@ export function Layout() {
 
   const email = profile?.email ?? session?.user.email ?? "";
   return (
+    <SettingsProvider>
     <PlayerProvider>
       <div className="app">
         <header className="mobilebar">
@@ -119,10 +137,12 @@ export function Layout() {
             )}
           </div>
           <nav className="nav" aria-label="Điều hướng chính">
-            <div className="nav-section">Làm việc</div>
-            <Links items={WORK} />
-            <div className="nav-section">Quản trị</div>
-            <Links items={ADMIN} />
+            {NAV.map((g) => (
+              <div key={g.title} className="nav-group">
+                <div className="nav-section">{g.title}</div>
+                <Links items={g.items} />
+              </div>
+            ))}
           </nav>
           <div className="userbox">
             <span className="avatar" aria-hidden="true">
@@ -144,10 +164,13 @@ export function Layout() {
           </div>
         </aside>
         <main className="content">
-          <Outlet />
+          <Suspense fallback={<Spinner />}>
+            <Outlet />
+          </Suspense>
         </main>
         <DialogHost />
       </div>
     </PlayerProvider>
+    </SettingsProvider>
   );
 }

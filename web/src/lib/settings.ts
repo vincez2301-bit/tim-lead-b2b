@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "./supabase";
 import type { Limits, Region, SettingRow } from "./db-types";
 import type { Segment } from "./api-types";
@@ -7,30 +7,59 @@ export interface SettingsMap {
   [key: string]: unknown;
 }
 
-export function useSettings() {
-  const [settings, setSettings] = useState<SettingsMap>({});
+interface SettingsState {
+  settings: SettingsMap;
+  rows: SettingRow[];
+  loading: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+  /** Ghi một khoá cài đặt (chỉ admin) rồi cập nhật bộ nhớ đệm. Trả về thông báo lỗi hoặc null. */
+  save: (key: string, value: unknown) => Promise<string | null>;
+}
+
+const Ctx = createContext<SettingsState | null>(null);
+
+/** Tải bảng settings MỘT lần cho cả phiên; mọi trang dùng chung (trước đây mỗi trang tự tải lại). */
+export function SettingsProvider({ children }: { children: ReactNode }) {
   const [rows, setRows] = useState<SettingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    setLoading(true);
     const { data, error } = await supabase.from("settings").select("*").order("key");
     if (error) setError(error.message);
     else {
-      const list = (data ?? []) as SettingRow[];
-      setRows(list);
-      setSettings(Object.fromEntries(list.map((r) => [r.key, r.value])));
+      setRows((data ?? []) as SettingRow[]);
       setError(null);
     }
     setLoading(false);
   }, []);
 
+  const save = useCallback(
+    async (key: string, value: unknown) => {
+      const { error } = await supabase.from("settings").upsert({ key, value });
+      if (error) return error.message;
+      await reload();
+      return null;
+    },
+    [reload],
+  );
+
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  return { settings, rows, loading, error, reload };
+  const value = useMemo<SettingsState>(
+    () => ({ settings: Object.fromEntries(rows.map((r) => [r.key, r.value])), rows, loading, error, reload, save }),
+    [rows, loading, error, reload, save],
+  );
+  return createElement(Ctx.Provider, { value }, children);
+}
+
+export function useSettings(): SettingsState {
+  const c = useContext(Ctx);
+  if (!c) throw new Error("useSettings cần SettingsProvider");
+  return c;
 }
 
 export function getLimits(s: SettingsMap): Limits {

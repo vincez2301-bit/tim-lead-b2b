@@ -33,6 +33,7 @@ export function TodayPage() {
   const openId = params.get("deal");
   const [queue, setQueue] = useState<string[] | null>(null);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
+  const [qualifyAll, setQualifyAll] = useState(false);
   const tab = (params.get("tab") as "qualify" | "touches" | null) ?? undefined;
 
   const load = useCallback(async () => {
@@ -77,8 +78,8 @@ export function TodayPage() {
   return (
     <section>
       <PageHeader
-        title="Việc hôm nay"
-        description="Điểm chạm đến hạn theo lịch 19 bước và lead cần đánh giá trước khi tiếp cận."
+        title="Hôm nay"
+        description="Việc đến hạn theo lịch 19 điểm chạm, và lead mới cần đánh giá trước khi tiếp cận."
         actions={
           <label className="checkbox inline">
             <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
@@ -111,6 +112,24 @@ export function TodayPage() {
             </div>
           </div>
 
+          {rows.length === 0 && (
+            <div className="card start-session">
+              <div>
+                <strong>Pipeline chưa có khách nào</strong>
+                <div className="small muted">
+                  Tìm công ty trên Google hoặc nhập file lead có sẵn, rồi bấm “Đưa vào Pipeline”. Khách mới sẽ hiện ở đây để đánh giá.
+                </div>
+              </div>
+              <div className="row nowrap">
+                <Link className="btn btn-primary" to="/search">
+                  Tìm khách mới
+                </Link>
+                <Link className="btn" to="/import">
+                  Nhập file
+                </Link>
+              </div>
+            </div>
+          )}
           {due.length > 0 && (
             <div className="card start-session">
               <div>
@@ -143,8 +162,9 @@ export function TodayPage() {
           <TaskList
             title="Cần đánh giá trước khi tiếp cận"
             empty="Không còn lead chờ đánh giá."
-            rows={toQualify.slice(0, 30)}
-            more={toQualify.length - 30}
+            rows={qualifyAll ? toQualify : toQualify.slice(0, 8)}
+            more={qualifyAll ? 0 : toQualify.length - 8}
+            onMore={() => setQualifyAll(true)}
             action="Đánh giá"
             onOpen={(id) => open(id, "qualify")}
             qualify
@@ -200,6 +220,7 @@ function TaskList({
   action,
   onOpen,
   qualify,
+  onMore,
 }: {
   title: string;
   empty: string;
@@ -208,6 +229,7 @@ function TaskList({
   action: string;
   onOpen: (id: string) => void;
   qualify?: boolean;
+  onMore?: () => void;
 }) {
   return (
     <div className="card">
@@ -255,7 +277,11 @@ function TaskList({
           })}
         </ul>
       )}
-      {more > 0 && <p className="small muted">… và {more} lead khác — xem trên bảng pipeline.</p>}
+      {more > 0 && (
+        <button type="button" className="btn-link small show-more" onClick={onMore}>
+          Hiện thêm {more} lead
+        </button>
+      )}
     </div>
   );
 }

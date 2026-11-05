@@ -26,12 +26,18 @@ Lệnh khác: `npm run typecheck`, `npm run build` (kiểm tra kiểu rồi buil
 
 ## Màn hình
 
-Đăng nhập (mật khẩu / magic link, không có đăng ký; hỗ trợ MFA TOTP) · Tổng quan · Tìm kiếm (ước tính
-lượt API trước khi chạy, xác nhận khi vượt ngưỡng, chạy pipeline theo lô) · Tín hiệu (admin duyệt, chỉnh
-trọng số) · Danh sách công ty + chi tiết (observation, bằng chứng, breakdown điểm, liên hệ) · Cohort
-builder (lưu cohort, export CSV/Excel) · Danh sách loại trừ (thêm/xoá, import CSV, xoá dữ liệu theo yêu cầu)
-· Cài đặt (JSON theo khoá, người dùng/vai trò, xoá lead cũ, bật MFA) · Nhật ký (runs, audit, tiếp tục run
-YouTube bị dừng vì hết quota).
+Menu theo thứ tự công việc:
+
+- **Bán hàng:** Hôm nay (trang chủ: việc đến hạn, lead cần đánh giá, làm lần lượt) · Pipeline (kanban, dự báo).
+- **Kho nội dung:** Email & tin nhắn mẫu (theo bước 19 điểm chạm × nhóm khách, chép / sửa tại chỗ) · Xử lý từ chối
+  (câu trả lời mẫu + khách đã từ chối chờ liên hệ lại) · Nhạc mẫu (chủ đề, trình phát).
+- **Tìm khách:** Tìm khách mới (form tìm Google → danh sách lượt tìm → bảng công ty của từng lượt: đã phân tích chưa,
+  điểm, đã vào Pipeline chưa; phân tích website và đưa vào Pipeline ngay tại đó) · Công ty · Nhập file.
+- **Hệ thống:** Xuất danh sách (cohort CSV/Excel) · Cài đặt (tab Chung: người gửi, MFA, người dùng, xoá lead cũ, JSON
+  nâng cao · Tín hiệu chấm điểm · Danh sách loại trừ · Nhật ký).
+
+Mỗi trang là một chunk riêng (`React.lazy`); React, Supabase và icon tách chunk vendor để trình duyệt giữ cache
+qua các lần deploy. Bảng `settings` tải một lần mỗi phiên (`SettingsProvider`).
 
 ## Triển khai (hosting tĩnh)
 

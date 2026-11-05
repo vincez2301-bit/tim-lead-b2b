@@ -429,3 +429,15 @@ export function signature(sd: Sender): string {
 export function renderTemplate(text: string, vars: Record<string, string>): string {
   return text.replace(/\{([a-z_]+)\}/g, (m, k: string) => (k in vars ? vars[k] : m));
 }
+
+/** Thêm công ty vào pipeline bán hàng (giai đoạn Lead mới); bỏ qua công ty đã có deal. */
+export async function addToSalesPipeline(ids: string[]): Promise<{ added: number; error: string | null }> {
+  const { data, error } = await supabase
+    .from("deals")
+    .upsert(
+      ids.map((company_id) => ({ company_id, stage: "new" })),
+      { onConflict: "company_id", ignoreDuplicates: true },
+    )
+    .select("id");
+  return { added: data?.length ?? 0, error: error?.message ?? null };
+}

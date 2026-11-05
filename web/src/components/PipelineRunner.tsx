@@ -75,7 +75,7 @@ export function PipelineRunner({
       if (res.failedIds.length) {
         setNotes((n) => [
           ...n,
-          `${STEP_LABEL[fn]}: bỏ qua ${res.failedIds.length} công ty vì server quá tải khi xử lý (website quá nặng hoặc phản hồi chậm). Có thể chạy lại riêng các công ty này ở trang Công ty.`,
+          `${STEP_LABEL[fn]}: bỏ qua ${res.failedIds.length} công ty vì server quá tải khi xử lý (website quá nặng hoặc phản hồi chậm). Có thể phân tích lại riêng các công ty này sau.`,
         ]);
       }
       if (res.error) {
@@ -110,10 +110,10 @@ export function PipelineRunner({
   return (
     <div className="card">
       <div className="row space-between">
-        <h3>Chạy pipeline cho {companyIds.length} công ty</h3>
+        <h3>Phân tích website cho {companyIds.length} công ty</h3>
         <div className="row">
           <button type="button" className="btn-primary" disabled={running || companyIds.length === 0} onClick={() => void start()}>
-            {running ? "Đang chạy…" : "Chạy pipeline"}
+            {running ? "Đang phân tích…" : "Bắt đầu phân tích"}
           </button>
           {running && (
             <button type="button" onClick={() => (cancelled.current = true)}>
@@ -123,7 +123,7 @@ export function PipelineRunner({
         </div>
       </div>
       <p className="muted small">
-        Thứ tự: {steps.map((s) => STEP_LABEL[s]).join(" → ")}. Mỗi lần gọi tối đa {batchSize} công ty.
+        Đọc website → kênh YouTube → tìm email, người phụ trách → chấm điểm. Mỗi lượt {batchSize} công ty; có thể để chạy, xong sẽ báo.
       </p>
       <ul className="steps">
         {steps.map((fn) => {

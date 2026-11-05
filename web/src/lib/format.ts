@@ -13,9 +13,9 @@ export const SEGMENT_LABEL: Record<Segment, string> = {
 
 export const STATUSES: CompanyStatus[] = ["new", "profiled", "enriched", "unreachable", "archived"];
 export const STATUS_LABEL: Record<CompanyStatus, string> = {
-  new: "Mới",
+  new: "Chưa phân tích",
   profiled: "Đã đọc website",
-  enriched: "Đã làm giàu",
+  enriched: "Đã phân tích",
   unreachable: "Không truy cập được",
   archived: "Lưu trữ",
 };

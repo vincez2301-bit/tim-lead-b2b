@@ -11,6 +11,7 @@ import { Kanban, Play, X } from "lucide-react";
 import { Badge, EmptyState, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
 import { PipelineRunner } from "../components/PipelineRunner";
+import { addToSalesPipeline } from "../lib/pipeline";
 
 const PAGE_SIZE = 50;
 
@@ -57,16 +58,12 @@ export function CompaniesPage() {
 
   async function addToPipeline() {
     const ids = [...selected];
-    const { data, error } = await supabase
-      .from("deals")
-      .upsert(ids.map((company_id) => ({ company_id, stage: "new" })), { onConflict: "company_id", ignoreDuplicates: true })
-      .select("id");
-    if (error) setNotice({ kind: "error", text: error.message });
+    const { added, error } = await addToSalesPipeline(ids);
+    if (error) setNotice({ kind: "error", text: error });
     else {
-      const added = data?.length ?? 0;
       setNotice({
         kind: "ok",
-        text: `Đã thêm ${added} công ty vào pipeline (giai đoạn Lead mới)${ids.length > added ? `, ${ids.length - added} công ty đã có sẵn` : ""}. Đánh giá chúng ở Việc hôm nay.`,
+        text: `Đã đưa ${added} công ty vào Pipeline (Lead mới)${ids.length > added ? `, ${ids.length - added} công ty đã có sẵn` : ""}. Chúng hiện ở Hôm nay → “Cần đánh giá” và cột Lead mới của Pipeline.`,
       });
       setSelected(new Set());
     }
@@ -168,7 +165,7 @@ export function CompaniesPage() {
     <section>
       <PageHeader
         title="Công ty"
-        description="Lead đã thu thập, xếp theo điểm. Tích chọn để chạy pipeline, bấm tên để xem vì sao công ty có điểm đó."
+        description="Lead đã thu thập, xếp theo điểm. Mọi công ty đã tìm hoặc nhập. Tích chọn để phân tích website hoặc đưa vào Pipeline bán hàng."
       />
       <div className="card">
         <div className="form-grid">
@@ -245,7 +242,7 @@ export function CompaniesPage() {
         <span className="muted">
           <strong className="stat-inline">{fmtNum(total)}</strong> công ty{city ? ` · ${city}` : ""}
         </span>
-        {selected.size === 0 && <span className="muted small">Tích chọn công ty để chạy pipeline.</span>}
+        {selected.size === 0 && <span className="muted small">Tích chọn công ty để phân tích hoặc đưa vào Pipeline.</span>}
       </div>
 
       {showRunner && selected.size > 0 && (
@@ -332,10 +329,10 @@ export function CompaniesPage() {
               requestAnimationFrame(() => document.getElementById("runner")?.scrollIntoView({ behavior: "smooth" }));
             }}
           >
-            <Play aria-hidden="true" /> Chạy pipeline dữ liệu
+            <Play aria-hidden="true" /> Phân tích website
           </button>
           <button type="button" onClick={() => void addToPipeline()}>
-            <Kanban aria-hidden="true" /> Thêm vào pipeline bán hàng
+            <Kanban aria-hidden="true" /> Đưa vào Pipeline bán hàng
           </button>
           <button type="button" className="btn-link" onClick={() => setSelected(new Set())}>
             <X aria-hidden="true" /> Bỏ chọn

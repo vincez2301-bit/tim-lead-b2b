@@ -221,7 +221,7 @@ export function ImportPage() {
             ))}
           </ul>
           <div className="row">
-            <Link className="btn btn-primary" to="/today">
+            <Link className="btn btn-primary" to="/">
               Mở Việc hôm nay
             </Link>
             <Link className="btn" to="/pipeline">

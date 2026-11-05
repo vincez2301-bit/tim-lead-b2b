@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
@@ -6,6 +7,10 @@ import type { Profile, Role } from "../lib/db-types";
 import { errMsg, fmtDate } from "../lib/format";
 import { Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { confirmDialog } from "../components/dialog";
+import { getSender, signature, type Sender } from "../lib/pipeline";
+import { SignalsPage } from "./Signals";
+import { DncPage } from "./Dnc";
+import { LogsPage } from "./Logs";
 
 const KEY_INFO: Record<string, { label: string; help: string; shape: "array" | "object" }> = {
   sender: {
@@ -372,7 +377,81 @@ function MfaSection() {
   );
 }
 
+const TABS = [
+  { key: "general", label: "Chung" },
+  { key: "signals", label: "Tín hiệu chấm điểm" },
+  { key: "dnc", label: "Danh sách loại trừ" },
+  { key: "logs", label: "Nhật ký" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
 export function SettingsPage() {
+  const [params, setParams] = useSearchParams();
+  const tab = (TABS.find((t) => t.key === params.get("tab"))?.key ?? "general") as TabKey;
+  return (
+    <>
+      <div className="tabs page-tabs" role="tablist" aria-label="Mục cài đặt">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            className={tab === t.key ? "tab active" : "tab"}
+            onClick={() => setParams(t.key === "general" ? {} : { tab: t.key })}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "general" && <GeneralSettings />}
+      {tab === "signals" && <SignalsPage />}
+      {tab === "dnc" && <DncPage />}
+      {tab === "logs" && <LogsPage />}
+    </>
+  );
+}
+
+function SenderForm({ isAdmin }: { isAdmin: boolean }) {
+  const { settings, save } = useSettings();
+  const [v, setV] = useState<Sender>(() => getSender(settings));
+  const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const field = (k: keyof Sender, label: string, ph: string) => (
+    <label>
+      {label}
+      <input value={v[k]} placeholder={ph} disabled={!isAdmin} onChange={(e) => setV({ ...v, [k]: e.target.value })} />
+    </label>
+  );
+  return (
+    <div className="card">
+      <h2>Thông tin người gửi</h2>
+      <p className="small muted">Dùng cho chữ ký cuối mọi email / tin nhắn soạn sẵn.</p>
+      <div className="form-grid">
+        {field("name", "Tên", "Việt")}
+        {field("title", "Chức danh", "Licensing Manager")}
+        {field("company", "Công ty", "Epidemic Sound tại Việt Nam")}
+        {field("phone", "Số điện thoại (Zalo / WhatsApp)", "+84 …")}
+      </div>
+      <div className="row">
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={!isAdmin}
+          onClick={async () => {
+            const err = await save("sender", v);
+            setMsg(err ? { kind: "error", text: err } : { kind: "ok", text: "Đã lưu." });
+          }}
+        >
+          Lưu
+        </button>
+        <span className="small muted pre-wrap">Chữ ký: {signature(v).replace(/\n/g, " · ")}</span>
+      </div>
+      {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+    </div>
+  );
+}
+
+function GeneralSettings() {
   const { isAdmin, profile } = useAuth();
   const { rows, settings, loading, error, reload } = useSettings();
   if (loading) return <Spinner />;
@@ -380,22 +459,28 @@ export function SettingsPage() {
   const ordered = [
     ...Object.keys(KEY_INFO).filter((k) => rows.some((r) => r.key === k)),
     ...rows.map((r) => r.key).filter((k) => !(k in KEY_INFO)),
-  ];
+  ].filter((k) => k !== "sender");
   const retention = Number((settings["retention"] as { months?: number } | undefined)?.months ?? 12);
 
   return (
     <section>
-      <PageHeader title="Cài đặt" description="Bảo mật tài khoản, người dùng, hạn mức API và bộ từ khoá mặc định." />
+      <PageHeader title="Cài đặt" description="Người gửi, bảo mật, người dùng và cấu hình nâng cao." />
       {!isAdmin && <Notice kind="info">Chỉ admin được sửa cài đặt. Vai trò của bạn: {profile?.role ?? "user"}.</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
+      <SenderForm isAdmin={isAdmin} />
       <MfaSection />
       {isAdmin && <UsersSection />}
       {isAdmin && <PurgeSection defaultMonths={retention} />}
-      <p className="small muted">Trọng số tín hiệu chỉnh ở màn hình Tín hiệu.</p>
-      {ordered.map((k) => {
-        const r = rows.find((x) => x.key === k)!;
-        return <SettingEditor key={k} k={k} value={r.value} updatedAt={r.updated_at} isAdmin={isAdmin} onSaved={() => void reload()} />;
-      })}
+      <details className="card advanced">
+        <summary>
+          <strong>Cấu hình nâng cao (JSON)</strong>
+          <span className="small muted"> — email mẫu và kịch bản từ chối sửa dễ hơn ở mục Kho nội dung</span>
+        </summary>
+        {ordered.map((k) => {
+          const r = rows.find((x) => x.key === k)!;
+          return <SettingEditor key={k} k={k} value={r.value} updatedAt={r.updated_at} isAdmin={isAdmin} onSaved={() => void reload()} />;
+        })}
+      </details>
     </section>
   );
 }
