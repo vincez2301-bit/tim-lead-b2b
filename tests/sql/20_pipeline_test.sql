@@ -127,6 +127,19 @@ select pg_temp.ok((select count(*) from public.deals where company_id = '2000000
   'admin xoá deal');
 reset role;
 
+-- ---------------------------------------------------------------- lý do từ chối
+set local role authenticated;
+select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+update public.deals set stage = 'nurture', lost_reason_code = 'competitor', competitor = 'Nhà cung cấp X',
+  contract_end = '2027-03-31' where company_id = (select id from public.companies where name = 'MCN B');
+select pg_temp.ok((select lost_reason_code || '|' || contract_end::text from public.deal_board where company_name = 'MCN B')
+  = 'competitor|2027-03-31', 'lưu lý do từ chối + ngày hết hợp đồng, view có cột mới');
+select pg_temp.ok(pg_temp.expect_error(
+  $q$update public.deals set lost_reason_code = 'hacker'$q$, 'lý do lạ') = '23514', 'lý do từ chối phải hợp lệ');
+select pg_temp.ok(jsonb_array_length(public.setting('objection_playbook')) >= 6, 'kịch bản xử lý từ chối');
+reset role;
+select set_config('request.jwt.claims', '', true);
+
 -- ---------------------------------------------------------------- purge giữ công ty đang có deal
 update public.companies set last_seen_at = now() - interval '2 years', first_seen_at = now() - interval '2 years';
 select pg_temp.ok(public.purge_stale_leads(12) = 1, 'purge chỉ xoá công ty không có deal còn tương tác');

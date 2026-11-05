@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth";
 import { SEGMENT_LABEL } from "../lib/format";
 import { rememberFilter, rememberedFilter } from "../lib/settings";
 import {
+  LOST_REASON_LABEL,
   OPEN_STAGES,
   SEGMENT_PRIORITY,
   STAGE_LABEL,
@@ -176,6 +177,12 @@ function TaskList({
                       {r.city ? ` · ${r.city}` : ""} · {STAGE_LABEL[r.stage]} · {r.touches}/{TOUCH_GOAL} điểm chạm
                     </span>
                     {!qualify && r.next_action && <span className="small">{r.next_action}</span>}
+                    {r.stage === "nurture" && r.lost_reason_code && (
+                      <span className="small muted">
+                        Từ chối vì: {LOST_REASON_LABEL[r.lost_reason_code]}
+                        {r.contract_end ? ` · hết HĐ ${fmtDay(r.contract_end)}` : ""}
+                      </span>
+                    )}
                   </span>
                   <span className="task-side">
                     {qualify ? (

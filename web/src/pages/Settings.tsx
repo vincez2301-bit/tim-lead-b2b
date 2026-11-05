@@ -8,6 +8,31 @@ import { Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { confirmDialog } from "../components/dialog";
 
 const KEY_INFO: Record<string, { label: string; help: string; shape: "array" | "object" }> = {
+  playlists: {
+    label: "Thư viện playlist",
+    help: 'Playlist gợi ý khi gửi Zalo/email: [{"title":"Tin tức – nhịp nhanh","url":"https://…","segments":["broadcaster"],"note":"…"}]. segments: broadcaster, mcn, agency, film, brand (bỏ trống = mọi nhóm).',
+    shape: "array",
+  },
+  objection_playbook: {
+    label: "Kịch bản xử lý từ chối",
+    help: 'Câu trả lời mẫu theo lý do: [{"reason":"price|competitor|no_need|timing|no_contact|other","title":"…","text":"…"}]. Hiện trong tab Điểm chạm của mỗi deal.',
+    shape: "array",
+  },
+  sales_calendar: {
+    label: "Lịch bán hàng",
+    help: 'budget_month: tháng khách thường lên ngân sách (1–12). Khách chê giá sẽ được hẹn liên hệ lại đầu tháng này.',
+    shape: "object",
+  },
+  cadence: {
+    label: "Lịch 19 điểm chạm",
+    help: 'Các bước: [{"step":1,"day":0,"channel":"email|call|zalo|linkedin|meeting|event|other","title":"…","hint":"…"}]. day = số ngày kể từ khi bắt đầu tiếp cận.',
+    shape: "array",
+  },
+  qualification_criteria: {
+    label: "Tiêu chí đánh giá lead",
+    help: 'Các câu hỏi trong tab Đánh giá: [{"key":"uses_music","label":"…"}]. Đổi key sẽ mất câu trả lời cũ của key đó.',
+    shape: "array",
+  },
   regions: {
     label: "Khu vực",
     help: "Mã khu vực, gl/hl của Serper, danh sách địa danh (name + aliases dùng để nhận diện thành phố).",

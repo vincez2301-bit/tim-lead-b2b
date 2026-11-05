@@ -20,6 +20,7 @@ export type Channel = "email" | "call" | "zalo" | "linkedin" | "meeting" | "even
 export type Outcome = "done" | "no_answer" | "replied" | "positive" | "negative";
 export type Billing = "annual" | "monthly" | "one_off";
 export type Answer = "yes" | "no" | "unknown";
+export type LostReason = "price" | "competitor" | "no_need" | "no_contact" | "timing" | "other";
 
 export interface Deal {
   id: string;
@@ -36,6 +37,9 @@ export interface Deal {
   expected_close: string | null;
   billing: Billing | null;
   lost_reason: string | null;
+  lost_reason_code: LostReason | null;
+  competitor: string | null;
+  contract_end: string | null;
   source: string | null;
   notes: string | null;
   created_by: string | null;
@@ -171,6 +175,68 @@ export const OUTCOME_TONE: Record<Outcome, string> = {
   negative: "red",
 };
 export const BILLING_LABEL: Record<Billing, string> = { annual: "Hằng năm", monthly: "Hằng tháng", one_off: "Một lần" };
+export const LOST_REASONS: LostReason[] = ["price", "competitor", "no_need", "timing", "no_contact", "other"];
+export const LOST_REASON_LABEL: Record<LostReason, string> = {
+  price: "Chê giá cao",
+  competitor: "Đang dùng nhà cung cấp khác",
+  no_need: "Chưa có nhu cầu",
+  timing: "Chưa đúng thời điểm",
+  no_contact: "Không liên lạc được",
+  other: "Lý do khác",
+};
+export const LOST_REASON_RULE: Record<LostReason, string> = {
+  price: "Liên hệ lại đầu tháng lên ngân sách (Cài đặt → sales_calendar.budget_month).",
+  competitor: "Liên hệ lại 75 ngày trước khi hợp đồng của họ hết hạn (chưa biết ngày: sau 4 tháng).",
+  no_need: "Liên hệ lại sau 6 tháng.",
+  timing: "Liên hệ lại sau 2 tháng.",
+  no_contact: "Thử lại sau 3 tháng, đổi kênh / đổi người.",
+  other: "Liên hệ lại sau 3 tháng.",
+};
+
+export interface Objection {
+  reason: LostReason;
+  title: string;
+  text: string;
+}
+export interface Playlist {
+  title: string;
+  url: string;
+  segments?: Segment[];
+  note?: string;
+}
+
+export function getPlaybook(s: SettingsMap): Objection[] {
+  const v = s["objection_playbook"];
+  return Array.isArray(v) ? (v as Objection[]).filter((x) => x && x.title && x.text) : [];
+}
+export function getPlaylists(s: SettingsMap): Playlist[] {
+  const v = s["playlists"];
+  return Array.isArray(v) ? (v as Playlist[]).filter((x) => x && x.title && /^https?:\/\//.test(x.url ?? "")) : [];
+}
+export function getBudgetMonth(s: SettingsMap): number {
+  const m = Number((s["sales_calendar"] as { budget_month?: number } | undefined)?.budget_month);
+  return Number.isInteger(m) && m >= 1 && m <= 12 ? m : 11;
+}
+
+/** Ngày nên liên hệ lại sau khi khách từ chối. */
+export function reengageDate(reason: LostReason, contractEnd: string | null, budgetMonth: number): string {
+  const t = todayIso();
+  if (reason === "price") {
+    const y = Number(t.slice(0, 4));
+    let d = `${y}-${String(budgetMonth).padStart(2, "0")}-01`;
+    if (d < addDays(t, 30)) d = `${y + 1}-${String(budgetMonth).padStart(2, "0")}-01`;
+    return d;
+  }
+  if (reason === "competitor") {
+    if (contractEnd) {
+      const d = addDays(contractEnd, -75);
+      return d > addDays(t, 7) ? d : addDays(t, 7);
+    }
+    return addDays(t, 120);
+  }
+  return addDays(t, reason === "no_need" ? 180 : reason === "timing" ? 60 : 90);
+}
+
 export const TIER_SHORT: Record<Tier, string> = { A: "ưu tiên cao", B: "phù hợp", C: "nuôi dưỡng" };
 export const TIER_HINT: Record<Tier, string> = {
   A: "Ưu tiên cao — tiếp cận ngay",

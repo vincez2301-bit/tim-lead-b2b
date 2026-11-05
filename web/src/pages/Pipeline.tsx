@@ -233,6 +233,11 @@ function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () 
         {r.city ? ` · ${r.city}` : ""}
         {r.is_dnc && <Badge tone="red">DNC</Badge>}
       </div>
+      {r.contract_end && (
+        <div className="small muted">
+          Hết HĐ {r.competitor ? `với ${r.competitor} ` : ""}: {fmtDay(r.contract_end)}
+        </div>
+      )}
       {r.next_action && (
         <div className={`due due-${due} small`}>
           {fmtDay(r.next_action_at)} · {r.next_action}

@@ -1649,3 +1649,53 @@ ul.contacts li {
     align-items: flex-start;
   }
 }
+
+/* Xử lý từ chối, playlist, câu mẫu */
+.card.reject {
+  border-color: color-mix(in srgb, var(--orange-fg) 35%, var(--border));
+  background: color-mix(in srgb, var(--orange-bg) 45%, var(--surface));
+}
+.helpers {
+  display: grid;
+  gap: 0.5rem;
+}
+.helpers details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.8rem;
+  background: var(--surface-2);
+}
+.helpers summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+.helpers details[open] summary {
+  margin-bottom: 0.5rem;
+}
+ul.snippets {
+  list-style: none;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+ul.snippets li {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.snippet-group + .snippet-group {
+  margin-top: 0.4rem;
+}
+.btn-link.small {
+  min-height: 26px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.78rem;
+}
+.btn-link.small svg {
+  width: 13px;
+  height: 13px;
+}

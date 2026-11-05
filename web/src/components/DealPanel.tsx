@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { ExternalLink, X } from "lucide-react";
+import { Copy, ExternalLink, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
@@ -8,6 +8,16 @@ import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtDate } from "../lib/format";
 import {
   BILLING_LABEL,
+  LOST_REASONS,
+  LOST_REASON_LABEL,
+  LOST_REASON_RULE,
+  getBudgetMonth,
+  getPlaybook,
+  getPlaylists,
+  reengageDate,
+  type LostReason,
+  type Objection,
+  type Playlist,
   CHANNELS,
   CHANNEL_LABEL,
   OUTCOMES,
@@ -70,6 +80,10 @@ export function DealPanel({
   const members = useMembers();
   const cadence = useMemo(() => getCadence(settings), [settings]);
   const criteria = useMemo(() => getCriteria(settings), [settings]);
+  const playbook = useMemo(() => getPlaybook(settings), [settings]);
+  const playlists = useMemo(() => getPlaylists(settings), [settings]);
+  const budgetMonth = getBudgetMonth(settings);
+  const [rejecting, setRejecting] = useState(false);
 
   const [deal, setDeal] = useState<DealRow | null>(null);
   const [acts, setActs] = useState<Activity[]>([]);
@@ -187,7 +201,18 @@ export function DealPanel({
                   </select>
                 </label>
               </div>
-              <p className="small muted stage-hint">{STAGE_HINT[deal.stage]}</p>
+              <div className="row space-between stage-hint">
+                <span className="small muted">
+                  {STAGE_HINT[deal.stage]}
+                  {deal.lost_reason_code && ` · Lý do: ${LOST_REASON_LABEL[deal.lost_reason_code]}`}
+                  {deal.contract_end && ` · Hết HĐ với ${deal.competitor ?? "NCC hiện tại"}: ${fmtDay(deal.contract_end)}`}
+                </span>
+                {!["won", "lost"].includes(deal.stage) && (
+                  <button type="button" className="btn-link small" onClick={() => setRejecting((v) => !v)}>
+                    Khách từ chối…
+                  </button>
+                )}
+              </div>
               <div className="tabs" role="tablist">
                 {(
                   [
@@ -205,6 +230,21 @@ export function DealPanel({
             <div className="drawer-body">
               {error && <Notice kind="error">{error}</Notice>}
               {info && <Notice kind="ok">{info}</Notice>}
+              {rejecting && (
+                <RejectForm
+                  deal={deal}
+                  budgetMonth={budgetMonth}
+                  userId={session?.user.id ?? null}
+                  onDone={async (msg) => {
+                    setRejecting(false);
+                    setInfo(msg);
+                    await load();
+                    onChanged();
+                  }}
+                  onCancel={() => setRejecting(false)}
+                  setError={setError}
+                />
+              )}
               {tab === "qualify" && (
                 <QualifyTab deal={deal} criteria={criteria} busy={busy} patch={patch} reload={load} onChanged={onChanged} setError={setError} cadenceFirst={cadence[0]?.title} />
               )}
@@ -215,6 +255,9 @@ export function DealPanel({
                   contacts={contacts}
                   cadence={cadence}
                   members={members}
+                  playbook={playbook}
+                  playlists={playlists}
+                  budgetMonth={budgetMonth}
                   userId={session?.user.id ?? null}
                   reload={async () => {
                     await load();
@@ -393,6 +436,9 @@ function TouchesTab({
   contacts,
   cadence,
   members,
+  playbook,
+  playlists,
+  budgetMonth,
   userId,
   reload,
   setError,
@@ -403,6 +449,9 @@ function TouchesTab({
   contacts: ContactRow[];
   cadence: ReturnType<typeof getCadence>;
   members: ReturnType<typeof useMembers>;
+  playbook: Objection[];
+  playlists: Playlist[];
+  budgetMonth: number;
   userId: string | null;
   reload: () => Promise<void>;
   setError: (s: string | null) => void;
@@ -440,9 +489,16 @@ function TouchesTab({
       const touches = acts.length + 1;
       let p: Partial<Deal>;
       let msg: string;
-      if ((outcome === "replied" || outcome === "positive") && ["new", "research", "outreach"].includes(deal.stage)) {
+      if ((outcome === "replied" || outcome === "positive") && ["new", "research", "outreach", "nurture"].includes(deal.stage)) {
         p = { stage: "connected", next_action: "Hẹn buổi tìm hiểu nhu cầu", next_action_at: addDays(todayIso(), 1) };
         msg = "Khách đã phản hồi → chuyển sang Đã phản hồi. Việc tiếp theo: hẹn buổi tìm hiểu nhu cầu.";
+      } else if (deal.stage === "nurture") {
+        const re = deal.lost_reason_code ? reengageDate(deal.lost_reason_code, deal.contract_end, budgetMonth) : addDays(todayIso(), 90);
+        const monthly = addDays(todayIso(), 30);
+        p = re < monthly
+          ? { next_action: `Liên hệ lại: ${deal.lost_reason_code ? LOST_REASON_LABEL[deal.lost_reason_code] : "nuôi dưỡng"}`, next_action_at: re }
+          : { next_action: "Điểm chạm nuôi dưỡng hằng tháng (playlist / tin bản quyền)", next_action_at: monthly };
+        msg = `Đã ghi điểm chạm nuôi dưỡng. Lần tới: ${fmtDay(p.next_action_at ?? null)}.`;
       } else {
         const nxt = nextStep(cadence, touches);
         p = nxt
@@ -496,6 +552,13 @@ function TouchesTab({
           </div>
         </div>
       )}
+      <Helpers
+        segment={deal.segment}
+        playbook={playbook}
+        playlists={playlists}
+        openPlaylists={!!step && /playlist|nhạc mẫu/i.test(step.title)}
+        focusReason={deal.lost_reason_code}
+      />
       <form className="log-form" onSubmit={(e) => void submit(e)}>
         <div className="chips" role="group" aria-label="Kênh">
           {CHANNELS.map((c) => (
@@ -598,6 +661,8 @@ function InfoTab({
     next_action: deal.next_action ?? "",
     next_action_at: deal.next_action_at ?? "",
     lost_reason: deal.lost_reason ?? "",
+    competitor: deal.competitor ?? "",
+    contract_end: deal.contract_end ?? "",
     notes: deal.notes ?? "",
   });
   const [c, setC] = useState({ name: "", title: "", email: "", phone: "" });
@@ -632,6 +697,8 @@ function InfoTab({
               next_action: f.next_action.trim() || null,
               next_action_at: f.next_action_at || null,
               lost_reason: f.lost_reason.trim() || null,
+              competitor: f.competitor.trim() || null,
+              contract_end: f.contract_end || null,
               notes: f.notes.trim() || null,
             },
             "Đã lưu.",
@@ -669,6 +736,14 @@ function InfoTab({
           <label>
             Hạn
             <input type="date" value={f.next_action_at} onChange={set("next_action_at")} />
+          </label>
+          <label>
+            Nhà cung cấp nhạc hiện tại
+            <input value={f.competitor} onChange={set("competitor")} placeholder="nếu có" />
+          </label>
+          <label>
+            Hợp đồng của họ hết hạn
+            <input type="date" value={f.contract_end} onChange={set("contract_end")} />
           </label>
         </div>
         {deal.stage === "lost" && (
@@ -728,6 +803,202 @@ function InfoTab({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Khách từ chối
+function RejectForm({
+  deal,
+  budgetMonth,
+  userId,
+  onDone,
+  onCancel,
+  setError,
+}: {
+  deal: DealRow;
+  budgetMonth: number;
+  userId: string | null;
+  onDone: (msg: string) => Promise<void>;
+  onCancel: () => void;
+  setError: (s: string | null) => void;
+}) {
+  const [reason, setReason] = useState<LostReason>(deal.lost_reason_code ?? "price");
+  const [competitor, setCompetitor] = useState(deal.competitor ?? "");
+  const [contractEnd, setContractEnd] = useState(deal.contract_end ?? "");
+  const [note, setNote] = useState("");
+  const [permanent, setPermanent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const suggested = reengageDate(reason, contractEnd || null, budgetMonth);
+  const [date, setDate] = useState(suggested);
+  useEffect(() => setDate(suggested), [suggested]);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!userId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const a = await supabase.from("activities").insert({
+        deal_id: deal.id,
+        user_id: userId,
+        channel: "other",
+        outcome: "negative",
+        note: `Từ chối: ${LOST_REASON_LABEL[reason]}${competitor ? ` (${competitor})` : ""}${note.trim() ? ` — ${note.trim()}` : ""}`,
+      });
+      if (a.error) throw a.error;
+      const u = await supabase
+        .from("deals")
+        .update({
+          stage: permanent ? "lost" : "nurture",
+          lost_reason_code: reason,
+          lost_reason: note.trim() || LOST_REASON_LABEL[reason],
+          competitor: competitor.trim() || null,
+          contract_end: contractEnd || null,
+          next_action: permanent ? null : `Liên hệ lại: ${LOST_REASON_LABEL[reason]}`,
+          next_action_at: permanent ? null : date,
+        })
+        .eq("id", deal.id);
+      if (u.error) throw u.error;
+      await onDone(permanent ? "Đã chuyển sang Thua." : `Đã chuyển sang Nuôi dưỡng, hẹn liên hệ lại ${fmtDay(date)}.`);
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="card reject" onSubmit={(e) => void submit(e)}>
+      <h3>Khách từ chối — lên lịch quay lại</h3>
+      <div className="form-grid">
+        <label>
+          Lý do
+          <select value={reason} onChange={(e) => setReason(e.target.value as LostReason)}>
+            {LOST_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {LOST_REASON_LABEL[r]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {reason === "competitor" && (
+          <>
+            <label>
+              Nhà cung cấp hiện tại
+              <input value={competitor} onChange={(e) => setCompetitor(e.target.value)} placeholder="vd. EMVN, nhạc qua MCN…" />
+            </label>
+            <label>
+              Hợp đồng của họ hết hạn
+              <input type="date" value={contractEnd} onChange={(e) => setContractEnd(e.target.value)} />
+            </label>
+          </>
+        )}
+        <label>
+          Liên hệ lại ngày
+          <input type="date" value={date} disabled={permanent} onChange={(e) => setDate(e.target.value || suggested)} />
+        </label>
+      </div>
+      <p className="small muted">{LOST_REASON_RULE[reason]}</p>
+      <label>
+        Ghi chú (khách nói gì)
+        <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      <label className="checkbox">
+        <input type="checkbox" checked={permanent} onChange={(e) => setPermanent(e.target.checked)} />
+        Không bao giờ phù hợp — chuyển sang Thua, không hẹn lại
+      </label>
+      <div className="row">
+        <button type="submit" className="btn-primary" disabled={busy}>
+          {permanent ? "Chuyển sang Thua" : "Lưu & hẹn liên hệ lại"}
+        </button>
+        <button type="button" onClick={onCancel}>
+          Huỷ
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ------------------------------------------------------------------ Câu xử lý từ chối + playlist gợi ý
+function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className="btn-link small"
+      onClick={() => {
+        void navigator.clipboard?.writeText(text).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 1500);
+        });
+      }}
+    >
+      <Copy aria-hidden="true" /> {done ? "Đã chép" : "Chép"}
+    </button>
+  );
+}
+
+function Helpers({
+  segment,
+  playbook,
+  playlists,
+  openPlaylists,
+  focusReason,
+}: {
+  segment: Segment | null;
+  playbook: Objection[];
+  playlists: Playlist[];
+  openPlaylists: boolean;
+  focusReason: LostReason | null;
+}) {
+  const lists = playlists.filter((p) => !p.segments?.length || (segment && p.segments.includes(segment)));
+  const groups = LOST_REASONS.map((r) => [r, playbook.filter((o) => o.reason === r)] as const).filter(([, xs]) => xs.length);
+  return (
+    <div className="helpers">
+      <details open={openPlaylists}>
+        <summary>Playlist gợi ý ({lists.length})</summary>
+        {lists.length === 0 ? (
+          <p className="small muted">
+            Chưa có playlist cho nhóm này. Thêm ở Cài đặt → Thư viện playlist (tiêu đề, link, nhóm khách).
+          </p>
+        ) : (
+          <ul className="snippets">
+            {lists.map((p) => (
+              <li key={p.url}>
+                <div className="row space-between nowrap">
+                  <SafeLink href={p.url}>{p.title}</SafeLink>
+                  <CopyButton text={`${p.title}: ${p.url}`} />
+                </div>
+                {p.note && <div className="small muted">{p.note}</div>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+      {groups.length > 0 && (
+        <details open={!!focusReason}>
+          <summary>Câu xử lý từ chối</summary>
+          {groups.map(([r, xs]) => (
+            <div key={r} className="snippet-group">
+              <strong className="small">{LOST_REASON_LABEL[r]}</strong>
+              <ul className="snippets">
+                {xs.map((o) => (
+                  <li key={o.title}>
+                    <div className="row space-between nowrap">
+                      <span className="small">
+                        <strong>{o.title}</strong>
+                      </span>
+                      <CopyButton text={o.text} />
+                    </div>
+                    <div className="small muted">{o.text}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </details>
+      )}
     </div>
   );
 }
