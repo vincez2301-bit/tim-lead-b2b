@@ -20,7 +20,7 @@ export type Channel = "email" | "call" | "zalo" | "linkedin" | "meeting" | "even
 export type Outcome = "done" | "no_answer" | "replied" | "positive" | "negative";
 export type Billing = "annual" | "monthly" | "one_off";
 export type Answer = "yes" | "no" | "unknown";
-export type LostReason = "price" | "competitor" | "no_need" | "no_contact" | "timing" | "other";
+export type LostReason = "price" | "competitor" | "no_need" | "no_contact" | "timing" | "other" | "unqualified";
 
 export interface Deal {
   id: string;
@@ -187,6 +187,7 @@ export const LOST_REASON_LABEL: Record<LostReason, string> = {
   timing: "Chưa đúng thời điểm",
   no_contact: "Không liên lạc được",
   other: "Lý do khác",
+  unqualified: "Không phù hợp",
 };
 export const LOST_REASON_RULE: Record<LostReason, string> = {
   price: "Liên hệ lại đầu tháng lên ngân sách (Cài đặt → sales_calendar.budget_month).",
@@ -195,6 +196,7 @@ export const LOST_REASON_RULE: Record<LostReason, string> = {
   timing: "Liên hệ lại sau 2 tháng.",
   no_contact: "Thử lại sau 3 tháng, đổi kênh / đổi người.",
   other: "Liên hệ lại sau 3 tháng.",
+  unqualified: "Không liên hệ lại; lần tìm sau tự bỏ qua công ty này.",
 };
 
 export type ObjectionTopic = "price" | "plan" | "usage" | "competitor" | "product" | "trust" | "legal" | "contract";
@@ -217,6 +219,7 @@ export const REASON_TOPICS: Record<LostReason, ObjectionTopic[]> = {
   timing: ["usage"],
   no_contact: [],
   other: [],
+  unqualified: [],
 };
 const TOPIC_REASON: Record<ObjectionTopic, LostReason> = {
   price: "price",
@@ -673,3 +676,31 @@ export function leadRank(r: Pick<DealRow, "tier" | "segment" | "score">): number
 
 /** Số lead mới gửi email mở lời mỗi ngày (lưu trên trình duyệt). */
 export const DEFAULT_NEW_PER_DAY = 2;
+
+// ------------------------------------------------------------------ Lead không phù hợp
+export type DisqualifyReason = "no_video" | "event" | "too_small" | "out_of_area" | "existing" | "duplicate" | "other";
+export const DISQUALIFY_REASONS: DisqualifyReason[] = ["no_video", "event", "too_small", "out_of_area", "existing", "duplicate", "other"];
+export const DISQUALIFY_LABEL: Record<DisqualifyReason, string> = {
+  no_video: "Không làm video / không dùng nhạc",
+  event: "Công ty sự kiện, in ấn, biển bảng",
+  too_small: "Quá nhỏ, không đủ ngân sách",
+  out_of_area: "Ngoài khu vực phụ trách",
+  existing: "Đã là khách hàng / đối tác",
+  duplicate: "Trùng hoặc sai thông tin",
+  other: "Lý do khác",
+};
+/** Từ khoá gợi ý thêm vào danh sách tự loại khi tìm công ty, theo lý do. */
+export const DISQUALIFY_SUGGEST_WORDS: Partial<Record<DisqualifyReason, string[]>> = {
+  event: ["event", "sự kiện", "wedding", "tiệc cưới", "in ấn", "bảng hiệu"],
+};
+
+export async function disqualifyCompanies(ids: string[], reason: DisqualifyReason, note: string) {
+  const { data, error } = await supabase.rpc("disqualify_companies", { p_ids: ids, p_reason: reason, p_note: note || null });
+  if (error) throw new Error(error.message);
+  return data as { companies: number; deals_removed: number; deals_closed: number };
+}
+export async function requalifyCompanies(ids: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc("requalify_companies", { p_ids: ids });
+  if (error) throw new Error(error.message);
+  return Number(data ?? 0);
+}

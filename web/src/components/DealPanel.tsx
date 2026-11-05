@@ -66,6 +66,7 @@ import {
 } from "../lib/pipeline";
 import { Badge, CopyButton, Notice, ScorePill, Spinner } from "./ui";
 import { SafeLink, shortUrl } from "./SafeLink";
+import { DisqualifyDialog } from "./Disqualify";
 
 interface ContactRow {
   id: string;
@@ -109,6 +110,7 @@ export function DealPanel({
   const templates = useMemo(() => getTemplates(settings), [settings]);
   const sender = useMemo(() => getSender(settings), [settings]);
   const [rejecting, setRejecting] = useState(false);
+  const [disqualifying, setDisqualifying] = useState(false);
 
   const [deal, setDeal] = useState<DealRow | null>(null);
   const [acts, setActs] = useState<Activity[]>([]);
@@ -249,9 +251,16 @@ export function DealPanel({
                   {deal.contract_end && ` · Hết HĐ với ${deal.competitor ?? "NCC hiện tại"}: ${fmtDay(deal.contract_end)}`}
                 </span>
                 {!["won", "lost"].includes(deal.stage) && (
-                  <button type="button" className="btn-link small" onClick={() => setRejecting((v) => !v)}>
-                    Khách từ chối…
-                  </button>
+                  <span className="row nowrap">
+                    {["new", "research", "outreach"].includes(deal.stage) && (
+                      <button type="button" className="btn-link small danger" onClick={() => setDisqualifying(true)}>
+                        Không phù hợp…
+                      </button>
+                    )}
+                    <button type="button" className="btn-link small" onClick={() => setRejecting((v) => !v)}>
+                      Khách từ chối…
+                    </button>
+                  </span>
                 )}
               </div>
               <div className="tabs" role="tablist">
@@ -285,6 +294,27 @@ export function DealPanel({
                   onCancel={() => setRejecting(false)}
                   setError={setError}
                 />
+              )}
+              {disqualifying && (
+                <DisqualifyDialog
+                  companies={[{ id: deal.company_id, name: deal.company_name }]}
+                  onClose={() => setDisqualifying(false)}
+                  onDone={() => {
+                    // Deal chưa liên hệ đã bị gỡ khỏi pipeline → đóng khung (hoặc sang khách kế tiếp khi làm lần lượt).
+                    setDisqualifying(false);
+                    onChanged();
+                    if (queue?.autoNext) queue.next();
+                    else onClose();
+                  }}
+                />
+              )}
+              {tab === "qualify" && ["new", "research"].includes(deal.stage) && (
+                <div className="reply-bar">
+                  <span className="small">Đánh giá xong thấy không đạt? Loại ngay để không mất thời gian tiếp cận.</span>
+                  <button type="button" className="btn-sm btn-danger" onClick={() => setDisqualifying(true)}>
+                    Không phù hợp…
+                  </button>
+                </div>
               )}
               {tab === "qualify" && (
                 <QualifyTab deal={deal} criteria={criteria} busy={busy} patch={patch} reload={load} onChanged={onChanged} setError={setError} cadenceFirst={cadence[0]?.title} />

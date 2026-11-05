@@ -62,6 +62,7 @@ export interface AppSettings {
   crawl: CrawlSettings;
   regions: Region[];
   aggregator_blocklist: string[];
+  discover_exclude_words: string[];
   signal_rules: Record<string, { type?: string; min?: number; max?: number }>;
 }
 
@@ -94,6 +95,9 @@ export async function loadSettings(db: Db): Promise<AppSettings> {
     regions: Array.isArray(map.get("regions")) ? map.get("regions") as Region[] : [],
     aggregator_blocklist: Array.isArray(map.get("aggregator_blocklist"))
       ? (map.get("aggregator_blocklist") as unknown[]).filter((x): x is string => typeof x === "string")
+      : [],
+    discover_exclude_words: Array.isArray(map.get("discover_exclude_words"))
+      ? (map.get("discover_exclude_words") as unknown[]).filter((x): x is string => typeof x === "string")
       : [],
     signal_rules: (map.get("signal_rules") ?? {}) as AppSettings["signal_rules"],
   };

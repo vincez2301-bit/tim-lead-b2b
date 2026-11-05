@@ -38,6 +38,7 @@ import {
 } from "../lib/pipeline";
 import { Badge, EmptyState, Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { DealPanel } from "../components/DealPanel";
+import { DisqualifyDialog } from "../components/Disqualify";
 
 export function PipelinePage() {
   const { session } = useAuth();
@@ -53,6 +54,8 @@ export function PipelinePage() {
   const [view, setView] = useState<"list" | "board">(() => (rememberedFilter("pipeline.view") === "board" ? "board" : "list"));
   useEffect(() => rememberFilter("pipeline.view", view === "board" ? "board" : ""), [view]);
   const [phase, setPhase] = useState<Phase | "">("");
+  const [disq, setDisq] = useState<{ id: string; name: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const { settings } = useSettings();
   const cadence = getCadence(settings);
   const [dragOver, setDragOver] = useState<Stage | null>(null);
@@ -124,6 +127,7 @@ export function PipelinePage() {
         description="Mỗi khách có một việc tiếp theo. Bấm “Làm” để mở nội dung soạn sẵn; làm xong, app tự hẹn bước kế tiếp."
       />
       {error && <Notice kind="error">{error}</Notice>}
+      {notice && <Notice kind="ok">{notice}</Notice>}
       <div className="row space-between view-bar">
         <div className="seg" role="group" aria-label="Kiểu xem">
           <button type="button" className={view === "list" ? "on" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>
@@ -220,7 +224,12 @@ export function PipelinePage() {
           </EmptyState>
         </div>
       ) : view === "list" ? (
-        <NextList rows={filtered.filter((r) => !phase || phaseOf(r.stage) === phase)} cadence={cadence} onOpen={open} />
+        <NextList
+          rows={filtered.filter((r) => !phase || phaseOf(r.stage) === phase)}
+          cadence={cadence}
+          onOpen={open}
+          onDisqualify={(r) => setDisq({ id: r.company_id, name: r.company_name })}
+        />
       ) : (
         <div className="board">
           {columns.map((stage) => {
@@ -255,6 +264,17 @@ export function PipelinePage() {
         </div>
       )}
       {openId && <DealPanel dealId={openId} onClose={close} onChanged={() => void load()} />}
+      {disq && (
+        <DisqualifyDialog
+          companies={[disq]}
+          onClose={() => setDisq(null)}
+          onDone={(msg) => {
+            setDisq(null);
+            setNotice(msg);
+            void load();
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -322,7 +342,17 @@ function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () 
 const PHASE_TONE: Record<Phase, string> = { start: "gray", outreach: "blue", talking: "orange", won: "green", paused: "gray" };
 
 /** Danh sách khách xếp theo việc cần làm: quá hạn / hôm nay → sắp tới → lead mới chờ tới lượt → còn lại. */
-function NextList({ rows, cadence, onOpen }: { rows: DealRow[]; cadence: CadenceStep[]; onOpen: (id: string) => void }) {
+function NextList({
+  rows,
+  cadence,
+  onOpen,
+  onDisqualify,
+}: {
+  rows: DealRow[];
+  cadence: CadenceStep[];
+  onOpen: (id: string) => void;
+  onDisqualify: (r: DealRow) => void;
+}) {
   const t = todayIso();
   const items = rows
     .map((r) => ({ r, m: nextMove(r, cadence), ph: phaseOf(r.stage) }))
@@ -398,6 +428,19 @@ function NextList({ rows, cadence, onOpen }: { rows: DealRow[]; cadence: Cadence
                       }}
                     >
                       {ph === "start" ? "Gửi email" : "Làm"}
+                    </button>
+                  )}
+                  {ph === "start" && (
+                    <button
+                      type="button"
+                      className="btn-link small danger"
+                      title="Không phù hợp — loại khỏi pipeline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDisqualify(r);
+                      }}
+                    >
+                      Loại
                     </button>
                   )}
                 </td>

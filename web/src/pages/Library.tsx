@@ -453,7 +453,9 @@ export function ObjectionLibraryPage() {
   }, [playbook, q, onlyCheck]);
   const count = (t: ObjectionTopic) => items.filter((x) => x.t === t).length;
   const topics = (topic ? [topic] : OBJECTION_TOPICS).filter((t) => count(t) > 0 || (editing === "new" && draft?.topic === t));
-  const people = (rejected ?? []).filter((d) => !reasonFilter || (d.lost_reason_code ?? "other") === reasonFilter);
+  const people = (rejected ?? [])
+    .filter((d) => d.lost_reason_code !== "unqualified")
+    .filter((d) => !reasonFilter || (d.lost_reason_code ?? "other") === reasonFilter);
 
   if (loading) return <Spinner />;
 

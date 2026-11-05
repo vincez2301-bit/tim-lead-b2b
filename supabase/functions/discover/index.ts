@@ -9,6 +9,7 @@ import { buildQuery, type Candidate, parseSerperResults, serperCall, SerperError
 import { confirmedSignals, insertObservations, recomputeScores } from "../_shared/signals.ts";
 import { type Finding, formatVnPhone, normalizeVnPhone } from "../_shared/extract.ts";
 import { loadDnc } from "../_shared/dnc.ts";
+import { excludeMatcher, foldVi } from "../_shared/exclude.ts";
 import type { DiscoverMode, DiscoverResponse, Segment } from "../_shared/types.ts";
 
 serve(async (req, body) => {
@@ -93,17 +94,35 @@ serve(async (req, body) => {
     }
   }
 
-  // ---- khử trùng trong lô, loại DNC
+  // ---- khử trùng trong lô, loại DNC, công ty đã đánh dấu không phù hợp, từ khoá tự loại
   const dnc = await loadDnc(ctx.db);
+  const disq = must(
+    await ctx.db.from("companies").select("domain, name, city").not("disqualified_at", "is", null).limit(20000),
+    "Đọc công ty đã loại",
+  ) as { domain: string | null; name: string; city: string | null }[];
+  const nameKey = (name: string, city: string | null) => `${foldVi(name).trim()}|${foldVi(city ?? "")}`;
+  const disqDomains = new Set(disq.map((d) => d.domain).filter((d): d is string => !!d));
+  const disqNames = new Set(disq.filter((d) => !d.domain).map((d) => nameKey(d.name, d.city)));
+  const excluded = excludeMatcher(settings.discover_exclude_words);
   const seen = new Set<string>();
   const accepted: Candidate[] = [];
   let skippedDnc = 0;
+  let skippedDisqualified = 0;
+  let skippedExcluded = 0;
   for (const c of candidates) {
     const key = c.domain ?? `${c.name.toLowerCase()}|${c.city ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
     if (dnc.isDomain(c.domain)) {
       skippedDnc++;
+      continue;
+    }
+    if (c.domain ? disqDomains.has(c.domain) : disqNames.has(nameKey(c.name, c.city))) {
+      skippedDisqualified++;
+      continue;
+    }
+    if (excluded(c.name, c.domain)) {
+      skippedExcluded++;
       continue;
     }
     accepted.push(c);
@@ -156,6 +175,8 @@ serve(async (req, body) => {
     existing: upserted.length - newIds.length,
     skipped_dnc: skippedDnc,
     skipped_blocked: skippedBlocked,
+    skipped_disqualified: skippedDisqualified,
+    skipped_excluded: skippedExcluded,
     units_used: unitsUsed,
   };
   await finishRun(ctx.db, runId, status, stats, { error: stopReason });

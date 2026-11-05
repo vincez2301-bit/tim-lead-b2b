@@ -20,6 +20,7 @@ Dùng chung cho cả nhóm (ai cũng xem và cập nhật được deal của nh
 - **Màn hình:** Hôm nay (việc trong ngày + lead mới gửi email, làm lần lượt), Kết quả (tỷ lệ trả lời theo nhóm khách, kênh, số lần liên hệ, theo tuần), Pipeline (mặc định là danh sách “việc tiếp theo” theo 5 nhóm: Chưa liên hệ, Đang tiếp cận, Đang trao đổi, Đã ký, Tạm dừng; bảng kéo thả là tuỳ chọn),
   Kho nội dung (email & tin nhắn mẫu, xử lý từ chối, nhạc mẫu), Tìm khách mới (lượt tìm → kết quả → phân tích → đưa vào Pipeline),
   Nhập file (JSON hoặc CSV; chạy lại cùng file không nhân đôi). Bảng: `deals`, `activities`, `run_companies`, view `deal_board`.
+- **Lead không phù hợp:** nút “Không phù hợp…” (khung khách, Pipeline, kết quả tìm kiếm, Công ty) ghi lý do trên công ty (`disqualify_companies`), gỡ lead chưa liên hệ khỏi pipeline; `discover` tự bỏ qua công ty đã loại và công ty khớp từ khoá tự loại (`settings.discover_exclude_words`). Khôi phục ở trang Công ty.
 - **Email nhắc việc mỗi sáng:** Edge Function `daily_digest` (Resend) được `pg_cron` gọi mỗi giờ; chỉ gửi khi đã bật, đúng giờ hẹn (giờ Việt Nam) và mỗi ngày một lần (`digest_log`). Bật ở Cài đặt → Email nhắc việc mỗi sáng.
 - Kiến trúc, chỗ trùng lặp và cách giảm nặng: [docs/kien-truc.md](docs/kien-truc.md).
 - File lead có dữ liệu cá nhân: **không commit vào repo** (repo công khai).

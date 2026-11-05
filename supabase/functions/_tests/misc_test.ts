@@ -145,3 +145,15 @@ Deno.test("pickServerKey: ưu tiên service_role, rồi SUPABASE_SECRET_KEYS", (
   assertEquals(pickServerKey(env({ SUPABASE_SECRET_KEYS: "not-json" })), null);
   assertEquals(pickServerKey(env({})), null);
 });
+
+import { excludeMatcher } from "../_shared/exclude.ts";
+
+Deno.test("excludeMatcher: từ khoá tự loại khi tìm công ty", () => {
+  const m = excludeMatcher(["event", "Sự kiện", "tv", " "]);
+  assertEquals(m("ABC Event & Media", "abcevent.vn"), "event");
+  assertEquals(m("Công ty Tổ chức Sự Kiện Sao Việt", null), "su kien");
+  assertEquals(m("Saigon TV", "saigontv.vn"), "tv");
+  assertEquals(m("ATV Studio", "atvstudio.vn"), null); // "tv" ngắn phải khớp nguyên từ
+  assertEquals(m("Đài Truyền hình HTV", "htv.com.vn"), null);
+  assertEquals(excludeMatcher([])("ABC Event", null), null);
+});

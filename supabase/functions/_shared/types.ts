@@ -66,6 +66,8 @@ export interface DiscoverResponse {
   existing: number;
   skipped_dnc: number;
   skipped_blocked: number;
+  skipped_disqualified: number; // công ty đã đánh dấu “không phù hợp”
+  skipped_excluded: number; // khớp từ khoá tự loại (settings.discover_exclude_words)
   company_ids: string[]; // mọi công ty ghi nhận trong lần chạy (mới + đã có)
   new_company_ids: string[];
   units_used: number;

@@ -11,7 +11,8 @@ import { Kanban, Play, X } from "lucide-react";
 import { Badge, EmptyState, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
 import { PipelineRunner } from "../components/PipelineRunner";
-import { addToSalesPipeline, foldVi } from "../lib/pipeline";
+import { DISQUALIFY_LABEL, addToSalesPipeline, foldVi, requalifyCompanies, type DisqualifyReason } from "../lib/pipeline";
+import { DisqualifyDialog } from "../components/Disqualify";
 
 const PAGE_SIZE = 50;
 
@@ -26,6 +27,8 @@ interface Row {
   score: number | null;
   is_dnc: boolean;
   last_seen_at?: string;
+  disqualified_at?: string | null;
+  disqualify_reason?: DisqualifyReason | null;
 }
 
 type Sort = "score" | "name" | "last_seen_at";
@@ -44,6 +47,9 @@ export function CompaniesPage() {
   const [signal, setSignal] = useState("");
   const [city, setCity] = useState(() => rememberedFilter("companies.city"));
   const [showDnc, setShowDnc] = useState(false);
+  // "" = ẩn công ty đã loại, "only" = chỉ xem công ty đã loại (để khôi phục).
+  const [disqView, setDisqView] = useState<"" | "only">("");
+  const [disqOpen, setDisqOpen] = useState(false);
   const [sort, setSort] = useState<Sort>("score");
   const [page, setPage] = useState(0);
 
@@ -63,7 +69,7 @@ export function CompaniesPage() {
     else {
       setNotice({
         kind: "ok",
-        text: `Đã đưa ${added} công ty vào Pipeline (Lead mới)${ids.length > added ? `, ${ids.length - added} công ty đã có sẵn` : ""}. Chúng hiện ở Hôm nay → “Cần đánh giá” và cột Lead mới của Pipeline.`,
+        text: `Đã đưa ${added} công ty vào Pipeline (Lead mới)${ids.length > added ? `, ${ids.length - added} công ty đã có sẵn` : ""}. Mỗi ngày app đưa vài lead ưu tiên nhất vào Hôm nay để gửi email mở lời.`,
       });
       setSelected(new Set());
     }
@@ -82,7 +88,7 @@ export function CompaniesPage() {
   const dMin = useDebounced(minScore, 400);
   useEffect(() => rememberFilter("companies.city", city), [city]);
   const cities = useMemo(() => allCityNames(settings), [settings]);
-  const filterKey = JSON.stringify([segment, status, dMin, dq, signal, city, showDnc, sort]);
+  const filterKey = JSON.stringify([segment, status, dMin, dq, signal, city, showDnc, sort, disqView]);
   useEffect(() => setPage(0), [filterKey]);
 
   useEffect(() => {
@@ -113,7 +119,8 @@ export function CompaniesPage() {
         }
         let qb = supabase
           .from("company_list")
-          .select("id,name,domain,website_url,segment,city,status,score,is_dnc,last_seen_at", { count: "exact" });
+          .select("id,name,domain,website_url,segment,city,status,score,is_dnc,last_seen_at,disqualified_at,disqualify_reason", { count: "exact" });
+        qb = disqView === "only" ? qb.not("disqualified_at", "is", null) : qb.is("disqualified_at", null);
         if (segment) qb = qb.eq("segment", segment);
         if (status) qb = qb.eq("status", status);
         if (city) qb = qb.ilike("city", city.replace(/[%_\\]/g, (c) => `\\${c}`));
@@ -138,7 +145,7 @@ export function CompaniesPage() {
     return () => {
       alive = false;
     };
-  }, [filterKey, page, reloadKey, dMin, dq, segment, status, signal, city, showDnc, sort]);
+  }, [filterKey, page, reloadKey, dMin, dq, segment, status, signal, city, showDnc, sort, disqView]);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const allOnPage = useMemo(() => (rows ?? []).map((r) => r.id), [rows]);
@@ -230,10 +237,16 @@ export function CompaniesPage() {
             </select>
           </label>
         </div>
-        <label className="checkbox">
-          <input type="checkbox" checked={showDnc} onChange={(e) => setShowDnc(e.target.checked)} />
-          Hiện cả công ty trong danh sách loại trừ (DNC)
-        </label>
+        <div className="row">
+          <label className="checkbox">
+            <input type="checkbox" checked={showDnc} onChange={(e) => setShowDnc(e.target.checked)} />
+            Hiện cả công ty trong danh sách loại trừ (DNC)
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" checked={disqView === "only"} onChange={(e) => setDisqView(e.target.checked ? "only" : "")} />
+            Chỉ xem công ty đã đánh dấu “không phù hợp”
+          </label>
+        </div>
       </div>
 
       {error && <Notice kind="error">{error}</Notice>}
@@ -292,6 +305,9 @@ export function CompaniesPage() {
                   </td>
                   <td>
                     <Link to={`/companies/${r.id}`}>{r.name}</Link> {r.is_dnc && <Badge tone="red">DNC</Badge>}
+                    {r.disqualified_at && (
+                      <div className="small muted">Không phù hợp: {r.disqualify_reason ? DISQUALIFY_LABEL[r.disqualify_reason] : "—"}</div>
+                    )}
                   </td>
                   <td>
                     {r.domain ? (
@@ -331,13 +347,48 @@ export function CompaniesPage() {
           >
             <Play aria-hidden="true" /> Phân tích website
           </button>
-          <button type="button" onClick={() => void addToPipeline()}>
-            <Kanban aria-hidden="true" /> Đưa vào Pipeline bán hàng
-          </button>
+          {disqView === "only" ? (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const n = await requalifyCompanies([...selected]);
+                  setNotice({ kind: "ok", text: `Đã khôi phục ${n} công ty. Chúng xuất hiện lại trong danh sách và lần tìm sau.` });
+                  setSelected(new Set());
+                  setReloadKey((k) => k + 1);
+                } catch (e) {
+                  setNotice({ kind: "error", text: errMsg(e) });
+                }
+              }}
+            >
+              Khôi phục
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={() => void addToPipeline()}>
+                <Kanban aria-hidden="true" /> Đưa vào Pipeline bán hàng
+              </button>
+              <button type="button" className="btn-danger" onClick={() => setDisqOpen(true)}>
+                Không phù hợp
+              </button>
+            </>
+          )}
           <button type="button" className="btn-link" onClick={() => setSelected(new Set())}>
             <X aria-hidden="true" /> Bỏ chọn
           </button>
         </div>
+      )}
+      {disqOpen && (
+        <DisqualifyDialog
+          companies={(rows ?? []).filter((r) => selected.has(r.id)).map((r) => ({ id: r.id, name: r.name }))}
+          onClose={() => setDisqOpen(false)}
+          onDone={(msg) => {
+            setDisqOpen(false);
+            setNotice({ kind: "ok", text: msg });
+            setSelected(new Set());
+            setReloadKey((k) => k + 1);
+          }}
+        />
       )}
       <div className="row pager">
         <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>

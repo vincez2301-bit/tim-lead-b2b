@@ -2520,3 +2520,26 @@ table.next-list td {
   width: 14px;
   height: 14px;
 }
+
+/* loại lead không phù hợp */
+dialog.dialog.disqualify {
+  width: min(560px, calc(100vw - 32px));
+}
+.disqualify form {
+  display: grid;
+  gap: 0.8rem;
+}
+.disqualify p {
+  margin: 0;
+}
+.exclude-box {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.search-form .exclude-box {
+  margin-top: 0.9rem;
+}

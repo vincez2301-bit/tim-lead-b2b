@@ -7,11 +7,13 @@ import type { CompanyStatus, DiscoverMode, DiscoverRequest, DiscoverResponse, Es
 import type { Run } from "../lib/db-types";
 import { SEGMENTS, SEGMENT_LABEL, STATUS_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { getBatchSize, getKeywordSet, getLimits, getRegions, locationNames, useSettings } from "../lib/settings";
-import { STAGE_LABEL, addToSalesPipeline, type Stage } from "../lib/pipeline";
+import { DISQUALIFY_LABEL, STAGE_LABEL, addToSalesPipeline, type DisqualifyReason, type Stage } from "../lib/pipeline";
 import { Badge, EmptyState, Notice, PageHeader, RunStatusBadge, ScorePill, Spinner, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
 import { PipelineRunner } from "../components/PipelineRunner";
 import { confirmDialog } from "../components/dialog";
+import { DisqualifyDialog } from "../components/Disqualify";
+import { useAuth } from "../lib/auth";
 
 const MAX_KEYWORDS = 20;
 const MAX_KEYWORD_LEN = 120;
@@ -54,6 +56,8 @@ interface ResultRow {
   status: CompanyStatus;
   score: number | null;
   deal: { id: string; stage: Stage } | null;
+  disqualified_at: string | null;
+  disqualify_reason: DisqualifyReason | null;
 }
 
 export function SearchPage() {
@@ -174,6 +178,9 @@ export function SearchPage() {
         kind: res.status === "done" ? "ok" : "warn",
         text:
           `Tìm được ${res.new} công ty mới, ${res.existing} công ty đã có. Danh sách ở ngay bên dưới — bước tiếp theo: phân tích website rồi đưa công ty phù hợp vào Pipeline.` +
+          (res.skipped_disqualified || res.skipped_excluded
+            ? ` Đã tự bỏ qua ${res.skipped_disqualified ?? 0} công ty bạn từng loại và ${res.skipped_excluded ?? 0} công ty khớp từ khoá tự loại.`
+            : "") +
           (res.message ? ` ${res.message}` : ""),
       });
       setFormOpen(false);
@@ -308,6 +315,7 @@ export function SearchPage() {
             Khôi phục từ khoá mặc định
           </button>
         </div>
+        <ExcludeWords />
       </details>
 
       {selectedRun && <RunResults key={selectedRun.id} run={selectedRun} batchSize={getBatchSize(settings)} />}
@@ -361,12 +369,13 @@ function RunResults({ run, batchSize }: { run: Run; batchSize: number }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [analyze, setAnalyze] = useState<string[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [disqOpen, setDisqOpen] = useState(false);
   const input = (run.input ?? {}) as RunInput;
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from("run_companies")
-      .select("is_new, company:companies(id,name,domain,website_url,city,segment,status,score,deals(id,stage))")
+      .select("is_new, company:companies(id,name,domain,website_url,city,segment,status,score,disqualified_at,disqualify_reason,deals(id,stage))")
       .eq("run_id", run.id)
       .limit(500);
     if (error) setError(error.message);
@@ -389,8 +398,9 @@ function RunResults({ run, batchSize }: { run: Run; batchSize: number }) {
 
   if (!rows) return <div className="card"><Spinner /></div>;
 
-  const notAnalyzed = rows.filter((r) => r.status === "new");
-  const notInPipeline = rows.filter((r) => !r.deal);
+  const notAnalyzed = rows.filter((r) => r.status === "new" && !r.disqualified_at);
+  const notInPipeline = rows.filter((r) => !r.deal && !r.disqualified_at);
+  const disqualifiedCount = rows.filter((r) => r.disqualified_at).length;
   const inPipeline = rows.length - notInPipeline.length;
   const ids = [...selected];
   const toggle = (id: string) =>
@@ -410,7 +420,8 @@ function RunResults({ run, batchSize }: { run: Run; batchSize: number }) {
             {input.location ? ` · ${input.location}` : ""} <span className="count">{rows.length}</span>
           </h2>
           <p className="small muted">
-            {fmtDate(run.started_at)} · {notAnalyzed.length} chưa phân tích · {inPipeline} đã ở Pipeline. Mọi công ty ở đây cũng đã được lưu vào mục{" "}
+            {fmtDate(run.started_at)} · {notAnalyzed.length} chưa phân tích · {inPipeline} đã ở Pipeline
+            {disqualifiedCount ? ` · ${disqualifiedCount} không phù hợp` : ""}. Mọi công ty ở đây cũng đã được lưu vào mục{" "}
             <Link to="/companies">Công ty</Link>.
           </p>
         </div>
@@ -447,10 +458,10 @@ function RunResults({ run, batchSize }: { run: Run; batchSize: number }) {
               className="btn-primary"
               disabled={selected.size === 0}
               onClick={async () => {
-                const r = await addToSalesPipeline(ids);
+                const r = await addToSalesPipeline(ids.filter((id) => !rows.find((x) => x.id === id)?.disqualified_at));
                 if (r.error) setError(r.error);
                 else {
-                  setNotice(`Đã đưa ${r.added} công ty vào Pipeline (Lead mới). Đánh giá chúng ở Hôm nay → “Cần đánh giá”.`);
+                  setNotice(`Đã đưa ${r.added} công ty vào Pipeline (Lead mới). Mỗi ngày app đưa vài lead ưu tiên nhất vào Hôm nay để gửi email mở lời.`);
                   setSelected(new Set());
                   void load();
                 }
@@ -458,7 +469,22 @@ function RunResults({ run, batchSize }: { run: Run; batchSize: number }) {
             >
               <Kanban aria-hidden="true" /> Đưa vào Pipeline ({selected.size})
             </button>
+            <button type="button" className="btn-danger" disabled={selected.size === 0} onClick={() => setDisqOpen(true)}>
+              Không phù hợp ({selected.size})
+            </button>
           </div>
+          {disqOpen && (
+            <DisqualifyDialog
+              companies={rows.filter((r) => selected.has(r.id)).map((r) => ({ id: r.id, name: r.name }))}
+              onClose={() => setDisqOpen(false)}
+              onDone={(msg) => {
+                setDisqOpen(false);
+                setNotice(msg);
+                setSelected(new Set());
+                void load();
+              }}
+            />
+          )}
           {analyze && (
             <PipelineRunner
               key={analyze.join(",")}
@@ -490,7 +516,16 @@ function RunResults({ run, batchSize }: { run: Run; batchSize: number }) {
                         <strong>{r.name}</strong>
                       </Link>
                       <div className="small muted">
-                        {r.is_new ? <Badge tone="green">Mới</Badge> : <Badge>Đã có</Badge>} {r.city ?? ""}
+                        {r.disqualified_at ? (
+                          <Badge tone="red" title={r.disqualify_reason ? DISQUALIFY_LABEL[r.disqualify_reason] : undefined}>
+                            Không phù hợp
+                          </Badge>
+                        ) : r.is_new ? (
+                          <Badge tone="green">Mới</Badge>
+                        ) : (
+                          <Badge>Đã có</Badge>
+                        )}{" "}
+                        {r.city ?? ""}
                       </div>
                     </td>
                     <td className="small col-web">{r.website_url ? <SafeLink href={r.website_url}>{shortUrl(r.website_url)}</SafeLink> : "—"}</td>
@@ -514,6 +549,44 @@ function RunResults({ run, batchSize }: { run: Run; batchSize: number }) {
           </TableWrap>
         </>
       )}
+    </div>
+  );
+}
+
+/** Từ khoá tự loại khi tìm: công ty có tên hoặc website chứa các từ này sẽ không được đưa vào kết quả. */
+function ExcludeWords() {
+  const { isAdmin } = useAuth();
+  const { settings, save } = useSettings();
+  const saved = (Array.isArray(settings["discover_exclude_words"]) ? settings["discover_exclude_words"] : []) as string[];
+  const [text, setText] = useState(saved.join(", "));
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => setText(saved.join(", ")), [saved.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="exclude-box">
+      <label>
+        Tự bỏ qua công ty có tên / website chứa (cách nhau bằng dấu phẩy)
+        <input
+          value={text}
+          disabled={!isAdmin}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="VD: event, sự kiện, wedding, in ấn"
+        />
+      </label>
+      <div className="row">
+        <button
+          type="button"
+          className="btn-sm"
+          disabled={!isAdmin || text === saved.join(", ")}
+          onClick={async () => {
+            const list = [...new Set(text.split(/[,;\n]+/).map((w) => w.trim()).filter((w) => w.length >= 2))];
+            const err = await save("discover_exclude_words", list);
+            setMsg(err ?? `Đã lưu ${list.length} từ khoá. Áp dụng từ lần tìm tiếp theo.`);
+          }}
+        >
+          Lưu từ khoá tự loại
+        </button>
+        {msg && <span className="small muted">{msg}</span>}
+      </div>
     </div>
   );
 }
