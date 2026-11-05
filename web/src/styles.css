@@ -1775,3 +1775,111 @@ ol.tracks li.off strong {
   border-radius: 8px;
   background: var(--accent-soft);
 }
+
+/* Nhạc mẫu — gọn */
+.themes {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+details.theme {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 0.9rem;
+}
+details.theme > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0;
+  cursor: pointer;
+  list-style: none;
+}
+details.theme > summary::-webkit-details-marker {
+  display: none;
+}
+details.theme > summary::before {
+  content: "▸";
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+details.theme[open] > summary::before {
+  transform: rotate(90deg);
+}
+details.theme.done {
+  border-color: color-mix(in srgb, var(--green-fg) 35%, var(--border));
+}
+.theme-title {
+  font-weight: 600;
+}
+.theme-segs {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.theme-desc,
+details.theme .official {
+  margin: 0 0 0.4rem;
+}
+details.theme .official {
+  padding: 0.35rem 0.6rem;
+}
+ol.tracks.compact {
+  margin: 0.25rem 0;
+}
+ol.tracks.compact li {
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  padding: 0.15rem 0.35rem;
+}
+ol.tracks.compact .btn-icon.play {
+  width: 26px;
+  min-height: 26px;
+}
+ol.tracks.compact .btn-icon.play svg {
+  width: 13px;
+  height: 13px;
+}
+.track-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 400;
+  font-size: 0.86rem;
+  min-width: 0;
+  cursor: pointer;
+}
+.track-check > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+ol.tracks li.added .track-check strong {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.theme-foot {
+  justify-content: space-between;
+  padding: 0.4rem 0 0.8rem;
+  border-top: 1px solid var(--border);
+}
+.theme-foot .playlist-link {
+  flex: 1;
+  justify-content: flex-end;
+}
+.theme-foot .playlist-link input {
+  max-width: 360px;
+  min-height: 32px;
+}
+.theme-foot .playlist-link button {
+  min-height: 32px;
+}
+details.library > summary {
+  cursor: pointer;
+}
+details.library[open] > summary {
+  margin-bottom: 0.75rem;
+}
