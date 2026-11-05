@@ -24,29 +24,16 @@ export interface Theme {
 
 export const PREVIEW_HOST = /^https:\/\/audiocdn\.epidemicsound\.com\//;
 
-/** Bảng màu rực rỡ (tông Epidemic Sound). */
-export const PALETTE: [string, string][] = [
-  ["#ff3d7f", "#ff8a3d"],
-  ["#7c5cff", "#3d8bff"],
-  ["#00c2a8", "#3dd68c"],
-  ["#ff8a3d", "#ffc93d"],
-  ["#3d8bff", "#00c2ff"],
-  ["#c13dff", "#ff3d7f"],
-  ["#ff5252", "#ff3dc8"],
-  ["#22c58b", "#00c2ff"],
-];
-
 function hash(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
 
-/** Màu gradient ổn định theo mã (bài hát / chủ đề). */
-export function gradientFor(key: string): string {
-  const [a, b] = PALETTE[hash(key) % PALETTE.length];
-  const angle = 100 + (hash(key + "a") % 120);
-  return `linear-gradient(${angle}deg, ${a}, ${b})`;
+/** Màu nhấn vừa phải theo chủ đề (dùng cho icon, thanh tiến độ). */
+const TONES = ["#5b3df5", "#e5487b", "#0e9f8c", "#e07a1f", "#2f6fdb", "#a443d6", "#d9473f", "#1f9d55"];
+export function toneFor(key: string): string {
+  return TONES[hash(key) % TONES.length];
 }
 
 export function mmss(s: number): string {

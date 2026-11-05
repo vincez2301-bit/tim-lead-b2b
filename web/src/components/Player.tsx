@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
-import { PREVIEW_HOST, gradientFor, mmss, type Track } from "../lib/music";
+import { PREVIEW_HOST, mmss, type Track } from "../lib/music";
 
 interface PlayerState {
   current: Track | null;
@@ -116,7 +116,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       {current && (
         <div className="player" role="region" aria-label="Trình phát nhạc">
           <div className="player-track">
-            <span className="art" style={{ background: gradientFor(current.id) }} aria-hidden="true" />
             <span className="player-text">
               <strong>{current.title}</strong>
               <span className="small">

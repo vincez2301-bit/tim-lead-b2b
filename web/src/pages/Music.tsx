@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   Briefcase,
   Camera,
@@ -26,7 +26,7 @@ import { useSettings } from "../lib/settings";
 import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg } from "../lib/format";
 import { getPlaylists, type Playlist } from "../lib/pipeline";
-import { gradientFor, mmss, type Theme, type Track } from "../lib/music";
+import { mmss, toneFor, type Theme, type Track } from "../lib/music";
 import { EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
 import { SafeLink } from "../components/SafeLink";
 import { usePlayer } from "../components/Player";
@@ -167,7 +167,7 @@ export function MusicPage() {
                   key={t.id}
                   type="button"
                   className={theme?.id === t.id ? "theme-card active" : "theme-card"}
-                  style={{ background: gradientFor(t.id) }}
+                  style={{ ["--tone" as string]: toneFor(t.id) } as CSSProperties}
                   onClick={() => setSelected(t.id)}
                   aria-pressed={theme?.id === t.id}
                 >
@@ -243,8 +243,8 @@ function ThemeDetail({
   const themePlaying = theme.tracks.some((t) => isCurrent(t)) && player.playing;
 
   return (
-    <div className="card theme-detail">
-      <div className="theme-hero" style={{ background: gradientFor(theme.id) }}>
+    <div className="card theme-detail" style={{ ["--tone" as string]: toneFor(theme.id) } as CSSProperties}>
+      <div className="theme-hero">
         <Icon className="hero-icon" aria-hidden="true" />
         <div className="hero-text">
           <span className="hero-kicker">{theme.segments.map((s) => SEGMENT_LABEL[s]).join(" · ")}</span>

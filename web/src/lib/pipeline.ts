@@ -40,6 +40,8 @@ export interface Deal {
   lost_reason_code: LostReason | null;
   competitor: string | null;
   contract_end: string | null;
+  signed_at: string | null;
+  effective_at: string | null;
   source: string | null;
   notes: string | null;
   created_by: string | null;

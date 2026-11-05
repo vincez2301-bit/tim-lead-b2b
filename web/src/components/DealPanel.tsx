@@ -663,6 +663,8 @@ function InfoTab({
     lost_reason: deal.lost_reason ?? "",
     competitor: deal.competitor ?? "",
     contract_end: deal.contract_end ?? "",
+    signed_at: deal.signed_at ?? "",
+    effective_at: deal.effective_at ?? "",
     notes: deal.notes ?? "",
   });
   const [c, setC] = useState({ name: "", title: "", email: "", phone: "" });
@@ -699,6 +701,8 @@ function InfoTab({
               lost_reason: f.lost_reason.trim() || null,
               competitor: f.competitor.trim() || null,
               contract_end: f.contract_end || null,
+              signed_at: f.signed_at || null,
+              effective_at: f.effective_at || null,
               notes: f.notes.trim() || null,
             },
             "Đã lưu.",
@@ -737,6 +741,18 @@ function InfoTab({
             Hạn
             <input type="date" value={f.next_action_at} onChange={set("next_action_at")} />
           </label>
+          {deal.stage === "won" && (
+            <>
+              <label>
+                Ngày ký
+                <input type="date" value={f.signed_at} onChange={set("signed_at")} />
+              </label>
+              <label>
+                Ngày hiệu lực
+                <input type="date" value={f.effective_at} onChange={set("effective_at")} />
+              </label>
+            </>
+          )}
           <label>
             Nhà cung cấp nhạc hiện tại
             <input value={f.competitor} onChange={set("competitor")} placeholder="nếu có" />

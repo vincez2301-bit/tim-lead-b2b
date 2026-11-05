@@ -115,6 +115,10 @@ export function PipelinePage() {
           <span className="stat-value">{fmtUsd(fc.best)}</span>
         </div>
         <div className="card stat">
+          <span className="stat-label">Đã ký ({filtered.filter((r) => r.stage === "won").length} khách)</span>
+          <span className="stat-value">{fmtUsd(fc.won)}</span>
+        </div>
+        <div className="card stat">
           <span className="stat-label">Việc quá hạn</span>
           <span className={overdue ? "stat-value text-danger" : "stat-value"}>{overdue}</span>
         </div>
@@ -234,6 +238,12 @@ function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () 
         {r.city ? ` · ${r.city}` : ""}
         {r.is_dnc && <Badge tone="red">DNC</Badge>}
       </div>
+      {r.stage === "won" && r.signed_at && (
+        <div className="small won-date">
+          Ký {fmtDay(r.signed_at)}
+          {r.effective_at ? ` · hiệu lực ${fmtDay(r.effective_at)}` : ""}
+        </div>
+      )}
       {r.contract_end && (
         <div className="small muted">
           Hết HĐ {r.competitor ? `với ${r.competitor} ` : ""}: {fmtDay(r.contract_end)}

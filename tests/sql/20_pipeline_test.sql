@@ -125,6 +125,9 @@ select pg_temp.ok((select stage from public.deal_board where company_name = 'MCN
 select public.import_leads($json$[{"name": "Studio Mới", "domain": "studiomoi.vn", "website_url": "https://studiomoi.vn/"}]$json$);
 select pg_temp.ok((select domain || '|' || website_url from public.companies where name = 'Studio Mới') = 'studiomoi.vn|https://studiomoi.vn/',
   'nhập bổ sung điền domain + website cho công ty đã có');
+select public.import_leads($json$[{"name": "MCN B", "stage": "won", "signed_at": "2026-10-30", "effective_at": "2026-10-01"}]$json$);
+select pg_temp.ok((select stage || '|' || signed_at::text || '|' || effective_at::text || '|' || coalesce(next_action, '-')
+  from public.deal_board where company_name = 'MCN B') = 'won|2026-10-30|2026-10-01|-', 'nhập khách đã ký → Thắng + ngày ký');
 delete from public.deals where company_id = '20000000-0000-0000-0000-000000000001';
 select pg_temp.ok((select count(*) from public.deals where company_id = '20000000-0000-0000-0000-000000000001') = 0,
   'admin xoá deal');
