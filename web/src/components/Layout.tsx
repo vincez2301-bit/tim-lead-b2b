@@ -10,6 +10,7 @@ import {
   ListFilter,
   LogOut,
   Menu,
+  Music,
   Radar,
   ScrollText,
   Search,
@@ -35,6 +36,7 @@ const WORK: NavItem[] = [
   { to: "/search", label: "Tìm kiếm", icon: Search },
   { to: "/companies", label: "Công ty", icon: Building2 },
   { to: "/cohort", label: "Cohort & xuất file", icon: ListFilter },
+  { to: "/music", label: "Nhạc mẫu", icon: Music },
 ];
 const ADMIN: NavItem[] = [
   { to: "/import", label: "Nhập dữ liệu", icon: Upload },

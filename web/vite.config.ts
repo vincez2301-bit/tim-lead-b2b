@@ -16,6 +16,7 @@ function cspPlugin(supabaseUrl: string): Plugin {
     "img-src 'self' data:",
     "font-src 'self'",
     `connect-src ${connect}`,
+    "media-src 'self' https://audiocdn.epidemicsound.com",
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",

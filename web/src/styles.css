@@ -1703,3 +1703,65 @@ ul.snippets li {
   width: 13px;
   height: 13px;
 }
+
+/* Nhạc mẫu */
+.seg-filter {
+  margin-bottom: 1rem;
+}
+ol.tracks {
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+ol.tracks li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+}
+ol.tracks li:hover {
+  background: var(--surface-2);
+}
+ol.tracks li.off {
+  opacity: 0.4;
+}
+ol.tracks li.off strong {
+  text-decoration: line-through;
+}
+.btn-icon.play {
+  width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.track-main {
+  display: grid;
+  min-width: 0;
+}
+.track-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track-tags {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.playlist-link input {
+  flex: 1;
+  min-width: 220px;
+}
+@media (max-width: 700px) {
+  ol.tracks li {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+  .track-tags {
+    display: none;
+  }
+}

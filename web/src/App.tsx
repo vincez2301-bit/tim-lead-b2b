@@ -15,6 +15,7 @@ import { LogsPage } from "./pages/Logs";
 import { TodayPage } from "./pages/Today";
 import { PipelinePage } from "./pages/Pipeline";
 import { ImportPage } from "./pages/Import";
+import { MusicPage } from "./pages/Music";
 
 function Guard() {
   const { loading, session, needsMfa } = useAuth();
@@ -37,6 +38,7 @@ export function App() {
         <Route path="today" element={<TodayPage />} />
         <Route path="pipeline" element={<PipelinePage />} />
         <Route path="import" element={<ImportPage />} />
+        <Route path="music" element={<MusicPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="signals" element={<SignalsPage />} />
         <Route path="companies" element={<CompaniesPage />} />
