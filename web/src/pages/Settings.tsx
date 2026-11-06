@@ -65,7 +65,7 @@ const KEY_INFO: Record<string, { label: string; help: string; shape: "array" | "
   },
   keyword_sets: {
     label: "Bộ từ khoá mặc định",
-    help: "Từ khoá gợi ý theo nhóm: agency, brand, film, mcn. Người dùng sửa được trước mỗi lần chạy.",
+    help: "Từ khoá gợi ý theo nhóm: broadcaster, mcn, agency, film, brand (tối đa 20 mỗi nhóm, không cần ghi tên thành phố). Người dùng sửa được trước mỗi lần chạy.",
     shape: "object",
   },
   aggregator_blocklist: {
