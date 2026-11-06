@@ -89,6 +89,17 @@ export interface ProfileResponse {
   decision_makers: number;
   remaining_ids: string[];
 }
+export interface FindWebsiteResponse {
+  run_id: string;
+  checked: number; // công ty chưa có website đã tìm
+  found: number;
+  phones: number; // số điện thoại công ty lấy từ Google
+  not_found: string[];
+  conflicts: string[]; // website tìm được đã thuộc công ty khác
+  units_used: number;
+  remaining_ids: string[];
+  stopped_reason: "quota" | null;
+}
 export interface EnrichContactResponse {
   run_id: string;
   processed: number;

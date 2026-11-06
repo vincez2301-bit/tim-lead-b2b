@@ -27,9 +27,10 @@ export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   partial: "Dừng giữa chừng",
 };
 
-export const STEPS: Step[] = ["discover", "profile", "enrich_youtube", "enrich_contact", "score", "export"];
+export const STEPS: Step[] = ["discover", "find_website", "profile", "enrich_youtube", "enrich_contact", "score", "export"];
 export const STEP_LABEL: Record<Step, string> = {
   discover: "Tìm công ty",
+  find_website: "Tìm website",
   profile: "Đọc website",
   enrich_youtube: "YouTube",
   enrich_contact: "Người liên hệ",

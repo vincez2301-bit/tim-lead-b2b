@@ -4,7 +4,7 @@ import type { CompanyStatus, EmailLabel, RunStatus, Segment } from "./api-types"
 export type SignalStatus = "proposed" | "confirmed" | "rejected";
 export type DncReason = "existing_customer" | "competitor" | "opted_out" | "other";
 export type Role = "admin" | "user";
-export type Step = "discover" | "profile" | "enrich_youtube" | "enrich_contact" | "score" | "export";
+export type Step = "discover" | "find_website" | "profile" | "enrich_youtube" | "enrich_contact" | "score" | "export";
 
 export interface Profile {
   user_id: string;

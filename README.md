@@ -2,7 +2,7 @@
 
 Web app giúp Licensing Manager **tìm và lọc lead B2B cần giấy phép nhạc (sync license)** tại Việt Nam: agency/production house, nhãn hàng làm nhiều video, hãng phim/hậu kỳ và MCN nhỏ.
 
-Pipeline: **discover** (Serper) → **profile** (đọc website bằng regex) → **enrich_youtube** (YouTube Data API) → **enrich_contact** (người quyết định + nhãn email) → **score** → **cohort / export**.
+Pipeline: **discover** (Serper) hoặc nhập danh sách tên → **find_website** (Google qua Serper, cho công ty chưa có website) → **profile** (đọc website bằng regex, tìm luôn người quyết định + email + điện thoại) → **enrich_youtube** (YouTube Data API) → **score** → **cohort / export**. **enrich_contact** vẫn chạy riêng được ở trang công ty.
 
 Mỗi phát hiện là một dòng trong bảng `observations`, kèm `evidence_url` và `confidence`. Admin duyệt tín hiệu nào được thu thập; cohort là truy vấn SQL tham số hoá. Ý tưởng lấy từ [Harvey](https://github.com/ethanplusai/harvey) (MIT).
 
@@ -23,6 +23,7 @@ Dùng chung cho cả nhóm (ai cũng xem và cập nhật được deal của nh
 - **Lead không phù hợp:** nút “Không phù hợp…” (khung khách, Pipeline, kết quả tìm kiếm, Công ty) ghi lý do trên công ty (`disqualify_companies`), gỡ lead chưa liên hệ khỏi pipeline; `discover` tự bỏ qua công ty đã loại và công ty khớp từ khoá tự loại (`settings.discover_exclude_words`). Khôi phục ở trang Công ty.
 - **Chặng chốt (khách đã trả lời):** bước kế tiếp đi theo giai đoạn chứ không theo số điểm chạm: Đã phản hồi → 13 hẹn buổi tìm hiểu nhu cầu (việc ngay trong ngày khách trả lời), Gặp / demo → 14 demo, 15 gửi báo giá, Đề xuất → 16–18 theo dõi, gặp người duyệt, xử lý băn khoăn, Chờ ký → 19 gửi hợp đồng. Ghi bước 13 tự sang Gặp / demo, gửi báo giá tự sang Đề xuất; các bước cách nhau tối đa 3 ngày. Khung **Tiến độ chốt** trong tab Điểm chạm có nút Tạo báo giá, Khách đồng ý (→ Chờ ký, gửi hợp đồng hôm nay), Đã ký hợp đồng (→ Thắng, điền ngày ký, ARR lấy từ báo giá). Hôm nay xếp khách đang chốt lên đầu (gần ký nhất trước) và kéo vào việc hôm nay khách có báo giá hết hạn trong 2 ngày.
 - **Báo giá nhanh:** bảng giá ở Cài đặt → Bảng giá (`settings.price_book`, giá chỉ nằm trong database). Tạo báo giá trong khung khách: chọn gói, số lượng, giảm giá, hạn hiệu lực; database đánh số `BG-2026-0001` và tự tính tổng (bảng `quotes`). Trang `/quotes/:id` in / lưu PDF (VND có dòng “bằng chữ”), email gửi báo giá soạn sẵn có số tiền và hạn hiệu lực.
+- **Nhập danh sách tên công ty:** Nhập file → “Dán danh sách tên công ty” (mỗi dòng một tên, dán thẳng từ Excel được). App đưa vào Pipeline rồi tự chạy: tìm website trên Google (`find_website`: so tên với domain / tiêu đề, bỏ trang danh bạ, báo, mạng xã hội; không thấy thì thử Google Maps và lấy số điện thoại công ty) → đọc website lấy email, số điện thoại, người phụ trách → tìm kênh YouTube. Mỗi công ty chưa có website tốn 1–2 lượt Serper; hết hạn mức ngày thì chạy lại hôm sau, công ty đã có website không tốn lượt. Nhập file Excel xong cũng có nút “Tìm website & liên hệ”.
 - **Email nhắc việc mỗi sáng:** Edge Function `daily_digest` (Resend) được `pg_cron` gọi mỗi giờ; chỉ gửi khi đã bật, đúng giờ hẹn (giờ Việt Nam) và mỗi ngày một lần (`digest_log`). Bật ở Cài đặt → Email nhắc việc mỗi sáng.
 - Kiến trúc, chỗ trùng lặp và cách giảm nặng: [docs/kien-truc.md](docs/kien-truc.md).
 - File lead có dữ liệu cá nhân: **không commit vào repo** (repo công khai).
@@ -38,7 +39,7 @@ Dùng chung cho cả nhóm (ai cũng xem và cập nhật được deal của nh
 │  └─ functions/
 │     ├─ _shared/              # safeFetch, extract, crawler, people, youtube, serper, csv, xlsx...
 │     ├─ _tests/               # deno test
-│     └─ estimate | discover | profile | enrich_youtube | enrich_contact | score | cohort_query | export
+│     └─ estimate | discover | find_website | profile | enrich_youtube | enrich_contact | score | cohort_query | export
 ├─ web/                        # React + Vite + TypeScript (xem web/README.md)
 ├─ tests/sql/                  # test SQL: RLS, trigger, chấm điểm, cohort, hạn mức
 ├─ scripts/test-db.sh          # chạy migration + test SQL trên Postgres thường

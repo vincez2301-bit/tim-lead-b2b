@@ -3,7 +3,7 @@ import { HttpError } from "./http.ts";
 import { type Db, must } from "./db.ts";
 import type { AuthContext } from "./auth.ts";
 
-export type Step = "discover" | "profile" | "enrich_youtube" | "enrich_contact" | "score" | "export";
+export type Step = "discover" | "find_website" | "profile" | "enrich_youtube" | "enrich_contact" | "score" | "export";
 
 // run "running" lâu hơn thế coi như đã chết (function bị timeout hoặc vượt CPU/bộ nhớ, mã 546).
 // Mỗi lượt tự dừng sau ~110s (crawl.time_budget_ms), nên 3 phút là đủ an toàn.

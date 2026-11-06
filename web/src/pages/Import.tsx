@@ -9,7 +9,8 @@ import { LEAD_FIELDS, findHeaderRow, guessMapping, rowsToLeads, type ImportRow, 
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtNum } from "../lib/format";
 import { Notice, PageHeader, TableWrap } from "../components/ui";
 import { confirmDialog } from "../components/dialog";
-import { useSettings } from "../lib/settings";
+import { getBatchSize, useSettings } from "../lib/settings";
+import { PipelineRunner } from "../components/PipelineRunner";
 import { getPlaybook, mergeObjections, parseObjectionFile } from "../lib/pipeline";
 
 type Stats = Record<string, number>;
@@ -24,6 +25,29 @@ const STAT_LABEL: Record<string, string> = {
   skipped_dnc: "Bỏ qua (danh sách loại trừ)",
   skipped_invalid: "Bỏ qua (thiếu tên)",
 };
+
+/** Danh sách tên dán vào (mỗi dòng một công ty; dán từ Excel thì lấy ô đầu tiên không phải ID / link kênh). */
+export function parseNameList(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const cell = line
+      .split("\t")
+      .map((c) => c.trim())
+      .find((c) => c && !/^UC[\w-]{20,}$/.test(c) && !/^https?:\/\//i.test(c));
+    const name = (cell ?? "")
+      .replace(/^(\d{1,3}[.)]|[-•*])\s+/, "")
+      .replace(/\s+-\s+YouTube$/i, "")
+      .trim()
+      .slice(0, 300);
+    const key = name.toLowerCase();
+    if (name && !seen.has(key)) {
+      seen.add(key);
+      out.push(name);
+    }
+  }
+  return out;
+}
 
 function isPlaybookFile(j: unknown): boolean {
   if (!j || typeof j !== "object") return false;
@@ -49,6 +73,15 @@ export function ImportPage() {
   const [defSegment, setDefSegment] = useState("");
   const [defSource, setDefSource] = useState("");
   const { settings, save } = useSettings();
+  // Dán danh sách tên công ty.
+  const [pasteText, setPasteText] = useState("");
+  const [pasteSegment, setPasteSegment] = useState("");
+  const [pasteSource, setPasteSource] = useState("");
+  const [pasteAuto, setPasteAuto] = useState(true);
+  // Công ty vừa nhập → Tìm website + Đọc website (liên hệ) + YouTube.
+  const [importedIds, setImportedIds] = useState<string[]>([]);
+  const [analyze, setAnalyze] = useState<{ ids: string[]; auto: boolean } | null>(null);
+  const pasteNames = useMemo(() => parseNameList(pasteText), [pasteText]);
 
   /** File kịch bản xử lý từ chối ({kind:"bigfish-objections", items:[…]}) → gộp vào kho Xử lý từ chối. */
   async function importPlaybook(text: string) {
@@ -126,20 +159,27 @@ export function ImportPage() {
     }
   }
 
-  async function run() {
-    const rows = effectiveRows;
+  async function run(rows = effectiveRows, autoAnalyze = false) {
     if (!rows) return;
     setBusy(true);
     setError(null);
+    setAnalyze(null);
+    setImportedIds([]);
     const total: Stats = {};
+    const ids = new Set<string>();
     try {
       for (let i = 0; i < rows.length; i += 100) {
         const { data, error } = await supabase.rpc("import_leads", { p_rows: rows.slice(i, i + 100) });
         if (error) throw error;
-        for (const [k, v] of Object.entries((data ?? {}) as Stats)) total[k] = (total[k] ?? 0) + Number(v);
+        for (const [k, v] of Object.entries((data ?? {}) as Record<string, unknown>)) {
+          if (k === "company_ids") (v as string[]).forEach((x) => ids.add(x));
+          else total[k] = (total[k] ?? 0) + Number(v);
+        }
         setProgress(Math.min(rows.length, i + 100));
       }
       setResult(total);
+      setImportedIds([...ids]);
+      if (autoAnalyze && ids.size) setAnalyze({ ids: [...ids], auto: true });
     } catch (err) {
       setError(`${errMsg(err)} (đã nhập ${progress} dòng; chạy lại cùng file sẽ không nhân đôi dữ liệu)`);
       if (Object.keys(total).length) setResult(total);
@@ -163,6 +203,67 @@ export function ImportPage() {
         description="Nhập danh sách lead / deal vào pipeline, hoặc file kịch bản xử lý từ chối. Công ty trùng tên hoặc domain được gộp; chạy lại cùng file không nhân đôi dữ liệu."
       />
       {!isAdmin && <Notice kind="info">Chỉ admin được nhập dữ liệu.</Notice>}
+      <div className="card">
+        <h2>Dán danh sách tên công ty</h2>
+        <p className="muted small">
+          Mỗi dòng một công ty (dán thẳng từ Excel cũng được). App đưa các công ty vào Pipeline, rồi tự tìm website trên Google, đọc
+          website lấy email, số điện thoại, người phụ trách và tìm kênh YouTube.
+        </p>
+        <textarea
+          rows={6}
+          value={pasteText}
+          disabled={!isAdmin || busy}
+          onChange={(e) => setPasteText(e.target.value)}
+          placeholder={"Yeah1\nCông ty TNHH Truyền thông Sóng Việt\nFapTV"}
+          aria-label="Danh sách tên công ty"
+        />
+        <div className="form-grid">
+          <label>
+            Nhóm khách
+            <select value={pasteSegment} onChange={(e) => setPasteSegment(e.target.value)}>
+              <option value="">— Chưa phân nhóm —</option>
+              {SEGMENTS.map((sg) => (
+                <option key={sg} value={sg}>
+                  {SEGMENT_LABEL[sg]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Nguồn
+            <input value={pasteSource} onChange={(e) => setPasteSource(e.target.value)} placeholder="VD: Danh sách MCN 11/2026" />
+          </label>
+        </div>
+        <label className="checkbox">
+          <input type="checkbox" checked={pasteAuto} onChange={(e) => setPasteAuto(e.target.checked)} />
+          Nhập xong tự tìm website và thông tin liên hệ (mỗi công ty chưa có website tốn 1–2 lượt Google)
+        </label>
+        <div className="row">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!isAdmin || busy || !pasteNames.length}
+            onClick={() =>
+              void run(
+                pasteNames.map((name) => ({
+                  name,
+                  ...(pasteSegment ? { segment: pasteSegment } : {}),
+                  source: pasteSource.trim() || "Danh sách dán tay",
+                })) as ImportRow[],
+                pasteAuto,
+              )
+            }
+          >
+            {busy ? `Đang nhập… ${progress}/${pasteNames.length}` : `Nhập ${pasteNames.length} công ty`}
+          </button>
+          {pasteNames.length > 0 && (
+            <span className="small muted">
+              {pasteNames.slice(0, 4).join(" · ")}
+              {pasteNames.length > 4 ? ` · … (+${pasteNames.length - 4})` : ""}
+            </span>
+          )}
+        </div>
+      </div>
       <div className="card">
         <h2>1. Chọn file</h2>
         <p className="muted small">
@@ -332,7 +433,7 @@ export function ImportPage() {
             </div>
           </div>
           <div className="row">
-            <button type="button" className="btn-primary" disabled={!isAdmin || busy} onClick={() => void run()}>
+            <button type="button" className="btn-primary" disabled={!isAdmin || busy} onClick={() => void run(effectiveRows)}>
               {busy ? `Đang nhập… ${progress}/${effectiveRows.length}` : `Nhập ${effectiveRows.length} công ty`}
             </button>
           </div>
@@ -349,6 +450,11 @@ export function ImportPage() {
             ))}
           </ul>
           <div className="row">
+            {importedIds.length > 0 && !analyze && (
+              <button type="button" className="btn-primary" onClick={() => setAnalyze({ ids: importedIds, auto: true })}>
+                Tìm website &amp; liên hệ cho {importedIds.length} công ty
+              </button>
+            )}
             <Link className="btn btn-primary" to="/">
               Mở Hôm nay
             </Link>
@@ -357,6 +463,15 @@ export function ImportPage() {
             </Link>
           </div>
         </div>
+      )}
+      {analyze && (
+        <PipelineRunner
+          key={analyze.ids.join(",")}
+          companyIds={analyze.ids}
+          batchSize={getBatchSize(settings)}
+          findWebsite
+          autoStart={analyze.auto}
+        />
       )}
     </section>
   );

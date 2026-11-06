@@ -57,6 +57,9 @@ verify_jwt = true
 [functions.discover]
 verify_jwt = true
 
+[functions.find_website]
+verify_jwt = true
+
 [functions.profile]
 verify_jwt = true
 

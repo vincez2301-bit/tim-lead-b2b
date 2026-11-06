@@ -132,7 +132,7 @@ export async function downloadExport(req: ExportRequest): Promise<{ filename: st
 // ---------------------------------------------------------------------------
 // Chạy function theo lô (profile, enrich_youtube, enrich_contact).
 // ---------------------------------------------------------------------------
-export type BatchFn = "profile" | "enrich_youtube" | "enrich_contact";
+export type BatchFn = "find_website" | "profile" | "enrich_youtube" | "enrich_contact";
 
 export interface BatchProgress {
   done: number;
