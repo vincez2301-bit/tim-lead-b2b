@@ -9,6 +9,7 @@ import { crawlSite } from "../_shared/crawler.ts";
 import { homeUrlFor } from "../_shared/domain.ts";
 import { loadDnc } from "../_shared/dnc.ts";
 import { CONTACT_KINDS, mxCache, saveContacts } from "../_shared/contacts.ts";
+import { cityFromPages } from "../_shared/city.ts";
 import { confirmedSignals, recomputeScores } from "../_shared/signals.ts";
 import type { EnrichContactResponse } from "../_shared/types.ts";
 
@@ -16,6 +17,7 @@ interface Company {
   id: string;
   domain: string | null;
   website_url: string | null;
+  city: string | null;
   status: string;
 }
 
@@ -29,7 +31,7 @@ serve(async (req, body) => {
   const runId = await startRun(ctx, "enrich_contact", { company_ids: ids });
   // Ba truy vấn độc lập: chạy song song.
   const [companiesRes, confirmed, dnc] = await Promise.all([
-    ctx.db.from("companies").select("id, domain, website_url, status").in("id", ids),
+    ctx.db.from("companies").select("id, domain, website_url, city, status").in("id", ids),
     confirmedSignals(ctx.db),
     loadDnc(ctx.db),
   ]);
@@ -61,6 +63,7 @@ serve(async (req, body) => {
         errors.push(`${c.domain}: ${crawl.errors.map((e) => e.error).join(", ") || "không truy cập được"}`);
         return;
       }
+      const city = c.city ? null : cityFromPages(crawl.pages, settings.regions[0]);
       const saved = await saveContacts(ctx.db, { id: c.id, domain: c.domain }, crawl.pages, crawl.homeUrl!, {
         dnc,
         confirmed,
@@ -68,7 +71,10 @@ serve(async (req, body) => {
         mxOf,
       });
       must(
-        await ctx.db.from("companies").update({ contacts_enriched_at: new Date().toISOString() }).eq("id", c.id),
+        await ctx.db.from("companies").update({
+          contacts_enriched_at: new Date().toISOString(),
+          ...(!c.city && city ? { city } : {}),
+        }).eq("id", c.id),
         "Cập nhật company",
       );
       processed++;

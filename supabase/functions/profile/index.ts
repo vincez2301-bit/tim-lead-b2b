@@ -11,6 +11,7 @@ import { homeUrlFor } from "../_shared/domain.ts";
 import { confirmedSignals, insertObservations, recomputeScores } from "../_shared/signals.ts";
 import { loadDnc } from "../_shared/dnc.ts";
 import { mxCache, saveContacts } from "../_shared/contacts.ts";
+import { cityFromPages } from "../_shared/city.ts";
 import type { ProfileResponse } from "../_shared/types.ts";
 
 interface Company {
@@ -18,6 +19,7 @@ interface Company {
   name: string;
   domain: string | null;
   website_url: string | null;
+  city: string | null;
   status: string;
 }
 
@@ -30,14 +32,14 @@ serve(async (req, body) => {
   const deadline = Date.now() + settings.crawl.time_budget_ms;
   const runId = await startRun(ctx, "profile", { company_ids: ids });
   const [companiesRes, confirmed, dnc] = await Promise.all([
-    ctx.db.from("companies").select("id, name, domain, website_url, status").in("id", ids),
+    ctx.db.from("companies").select("id, name, domain, website_url, city, status").in("id", ids),
     confirmedSignals(ctx.db),
     loadDnc(ctx.db),
   ]);
   const companies = must(companiesRes, "Đọc companies") as Company[];
   const mxOf = mxCache();
 
-  let processed = 0, failed = 0, skipped = 0, observations = 0, contacts = 0, decisionMakers = 0;
+  let processed = 0, failed = 0, skipped = 0, observations = 0, contacts = 0, decisionMakers = 0, citiesFound = 0;
   const remaining: string[] = [];
   const errors: { company: string; url: string; error: string }[] = [];
   const touched: string[] = [];
@@ -116,12 +118,16 @@ serve(async (req, body) => {
       contacts += saved.contacts;
       decisionMakers += saved.decisionMakers;
       const now = new Date().toISOString();
+      // Chưa có thành phố: lấy từ địa chỉ trên website (trang Liên hệ / chân trang).
+      const city = c.city ? null : cityFromPages(crawl.pages, settings.regions[0]);
+      if (city) citiesFound++;
       must(
         await ctx.db.from("companies").update({
           status: c.status === "enriched" ? "enriched" : "profiled",
           profiled_at: now,
           contacts_enriched_at: now,
           website_url: crawl.homeUrl,
+          ...(city ? { city } : {}),
         }).eq("id", c.id),
         "Cập nhật company",
       );
@@ -135,7 +141,7 @@ serve(async (req, body) => {
 
   if (touched.length) await recomputeScores(ctx.db, touched);
 
-  const stats = { processed, failed, skipped, observations, contacts, decision_makers: decisionMakers, remaining: remaining.length, fetch_errors: errors.slice(0, 50) };
+  const stats = { processed, failed, skipped, observations, contacts, decision_makers: decisionMakers, cities: citiesFound, remaining: remaining.length, fetch_errors: errors.slice(0, 50) };
   await finishRun(ctx.db, runId, remaining.length ? "partial" : "done", stats, {
     progress: remaining.length ? { remaining_ids: remaining } : null,
     error: errors.length ? `${errors.length} lỗi tải trang (xem stats.fetch_errors)` : null,
@@ -150,6 +156,7 @@ serve(async (req, body) => {
     observations,
     contacts,
     decision_makers: decisionMakers,
+    cities: citiesFound,
     remaining_ids: remaining,
   };
   return json(res);

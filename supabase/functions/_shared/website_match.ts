@@ -131,6 +131,16 @@ export function pickFromMaps(name: string, body: Record<string, unknown>, blockl
   return null;
 }
 
+/** Địa chỉ trong Knowledge Graph (thuộc tính “Địa chỉ” / “Address” / “Trụ sở”). */
+export function kgAddress(body: Record<string, unknown>): string | null {
+  const attrs = (body.knowledgeGraph as Record<string, unknown> | undefined)?.attributes as Record<string, unknown> | undefined;
+  if (!attrs) return null;
+  for (const [k, v] of Object.entries(attrs)) {
+    if (/^(địa chỉ|dia chi|address|headquarters|trụ sở( chính)?)$/i.test(k.trim()) && typeof v === "string") return v.slice(0, 300);
+  }
+  return null;
+}
+
 /** Số điện thoại trong Knowledge Graph (thuộc tính “Điện thoại” / “Phone”). */
 export function kgPhone(body: Record<string, unknown>): string | null {
   const attrs = (body.knowledgeGraph as Record<string, unknown> | undefined)?.attributes as Record<string, unknown> | undefined;

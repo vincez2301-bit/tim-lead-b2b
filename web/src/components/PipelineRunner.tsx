@@ -20,11 +20,11 @@ function summarize(fn: BatchFn, responses: unknown[]): string {
     const r = responses as FindWebsiteResponse[];
     const checked = sumField(r, "checked");
     if (!checked) return "Mọi công ty đều đã có website.";
-    return `Tìm thấy website cho ${sumField(r, "found")}/${checked} công ty, ${sumField(r, "phones")} số điện thoại từ Google, dùng ${sumField(r, "units_used")} lượt Google.`;
+    return `Tìm thấy website cho ${sumField(r, "found")}/${checked} công ty, ${sumField(r, "phones")} số điện thoại và ${sumField(r, "cities")} thành phố từ Google, dùng ${sumField(r, "units_used")} lượt Google.`;
   }
   if (fn === "profile") {
     const r = responses as ProfileResponse[];
-    return `Đã xử lý ${sumField(r, "processed")}, lỗi website ${sumField(r, "failed")}, bỏ qua ${sumField(r, "skipped")}, ${sumField(r, "observations")} observation mới, ${sumField(r, "contacts")} liên hệ (${sumField(r, "decision_makers")} người quyết định).`;
+    return `Đã xử lý ${sumField(r, "processed")}, lỗi website ${sumField(r, "failed")}, bỏ qua ${sumField(r, "skipped")}, ${sumField(r, "observations")} observation mới, ${sumField(r, "contacts")} liên hệ (${sumField(r, "decision_makers")} người quyết định)${sumField(r, "cities") ? `, điền thành phố cho ${sumField(r, "cities")} công ty` : ""}.`;
   }
   if (fn === "enrich_youtube") {
     const r = responses as EnrichYoutubeResponse[];

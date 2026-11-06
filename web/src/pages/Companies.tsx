@@ -15,6 +15,8 @@ import { DISQUALIFY_LABEL, addToSalesPipeline, foldVi, requalifyCompanies, type 
 import { DisqualifyDialog } from "../components/Disqualify";
 
 const PAGE_SIZE = 50;
+/** Giá trị lọc “Chưa có thành phố”. */
+const NO_CITY = "__none__";
 
 interface Row {
   id: string;
@@ -104,7 +106,7 @@ export function CompaniesPage() {
             must: [signal],
             segments: segment ? [segment] : [],
             statuses: status ? [status] : [],
-            cities: city ? [city] : [],
+            cities: city && city !== NO_CITY ? [city] : [],
             min_score: min !== null && Number.isFinite(min) ? min : null,
             q: query || undefined,
             include_dnc: showDnc,
@@ -123,7 +125,8 @@ export function CompaniesPage() {
         qb = disqView === "only" ? qb.not("disqualified_at", "is", null) : qb.is("disqualified_at", null);
         if (segment) qb = qb.eq("segment", segment);
         if (status) qb = qb.eq("status", status);
-        if (city) qb = qb.ilike("city", city.replace(/[%_\\]/g, (c) => `\\${c}`));
+        if (city === NO_CITY) qb = qb.is("city", null);
+        else if (city) qb = qb.ilike("city", city.replace(/[%_\\]/g, (c) => `\\${c}`));
         if (min !== null && Number.isFinite(min)) qb = qb.gte("score", min);
         if (!showDnc) qb = qb.eq("is_dnc", false);
         if (query) qb = qb.or(`name_search.ilike.*${foldVi(query)}*,domain.ilike.*${query}*`);
@@ -195,6 +198,7 @@ export function CompaniesPage() {
             Thành phố
             <select value={city} onChange={(e) => setCity(e.target.value)}>
               <option value="">Tất cả</option>
+              <option value={NO_CITY}>Chưa có thành phố</option>
               {cities.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -251,9 +255,15 @@ export function CompaniesPage() {
 
       {error && <Notice kind="error">{error}</Notice>}
       {notice && <Notice kind={notice.kind}>{notice.text}</Notice>}
+      {city === NO_CITY && total > 0 && (
+        <Notice kind="info">
+          Tích chọn các công ty có website rồi bấm Phân tích website: app lấy thành phố từ địa chỉ trên website (trang Liên hệ, chân
+          trang). Công ty chưa có website thì app tìm trên Google trước.
+        </Notice>
+      )}
       <div className="toolbar">
         <span className="muted">
-          <strong className="stat-inline">{fmtNum(total)}</strong> công ty{city ? ` · ${city}` : ""}
+          <strong className="stat-inline">{fmtNum(total)}</strong> công ty{city === NO_CITY ? " chưa có thành phố" : city ? ` · ${city}` : ""}
         </span>
         {selected.size === 0 && <span className="muted small">Tích chọn công ty để phân tích hoặc đưa vào Pipeline.</span>}
       </div>
@@ -264,6 +274,7 @@ export function CompaniesPage() {
           key={[...selected].join(",")}
           companyIds={[...selected]}
           batchSize={getBatchSize(settings)}
+          findWebsite={(rows ?? []).some((r) => selected.has(r.id) && !r.domain)}
           onFinished={() => setReloadKey((k) => k + 1)}
         />
         </div>

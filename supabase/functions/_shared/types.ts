@@ -87,6 +87,8 @@ export interface ProfileResponse {
   /** Người liên hệ tìm được trong cùng lượt đọc website. */
   contacts: number;
   decision_makers: number;
+  /** Công ty được điền thành phố từ địa chỉ trên website. */
+  cities?: number;
   remaining_ids: string[];
 }
 export interface FindWebsiteResponse {
@@ -94,6 +96,7 @@ export interface FindWebsiteResponse {
   checked: number; // công ty chưa có website đã tìm
   found: number;
   phones: number; // số điện thoại công ty lấy từ Google
+  cities?: number; // công ty được điền thành phố từ địa chỉ Google
   not_found: string[];
   conflicts: string[]; // website tìm được đã thuộc công ty khác
   units_used: number;

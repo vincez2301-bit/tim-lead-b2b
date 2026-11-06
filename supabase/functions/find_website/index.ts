@@ -10,7 +10,8 @@ import { assertConcurrency, audit, finishRun, startRun } from "../_shared/runs.t
 import { serperCall, SerperError } from "../_shared/serper.ts";
 import { loadDnc } from "../_shared/dnc.ts";
 import { formatVnPhone, normalizeVnPhone } from "../_shared/extract.ts";
-import { kgPhone, pickFromMaps, pickFromSearch } from "../_shared/website_match.ts";
+import { kgAddress, kgPhone, pickFromMaps, pickFromSearch } from "../_shared/website_match.ts";
+import { cityFromText } from "../_shared/city.ts";
 import type { FindWebsiteResponse } from "../_shared/types.ts";
 
 interface Company {
@@ -41,7 +42,7 @@ serve(async (req, body) => {
     api_units_estimated: todo.length,
   });
 
-  let found = 0, phones = 0, unitsUsed = 0;
+  let found = 0, phones = 0, cities = 0, unitsUsed = 0;
   let stopped: "quota" | null = null;
   const notFound: string[] = [];
   const conflicts: { name: string; domain: string }[] = [];
@@ -78,6 +79,7 @@ serve(async (req, body) => {
       }
       let pick = pickFromSearch(c.name, search, settings.aggregator_blocklist);
       let phone = kgPhone(search);
+      let address = kgAddress(search);
       let mapsUrl: string | null = null;
       if (!pick) {
         // Không thấy website: thử Google Maps (thêm 1 lượt), lấy cả số điện thoại nếu có.
@@ -86,10 +88,12 @@ serve(async (req, body) => {
         if (place) {
           if (!pick && place.domain) pick = { domain: place.domain, website_url: place.website_url!, score: 0.6, via: "maps" };
           phone ??= place.phone;
+          address ??= place.address;
           mapsUrl = place.maps_url;
         }
       }
       if (pick && dnc.isDomain(pick.domain)) pick = null;
+      const city = c.city ? null : cityFromText(address, region);
 
       if (pick) {
         const taken = must(
@@ -101,13 +105,22 @@ serve(async (req, body) => {
           pick = null;
         } else {
           must(
-            await ctx.db.from("companies").update({ domain: pick.domain, website_url: pick.website_url }).eq("id", c.id),
+            await ctx.db.from("companies").update({ domain: pick.domain, website_url: pick.website_url, ...(city ? { city } : {}) })
+              .eq("id", c.id),
             "Ghi website",
           );
           found++;
+          if (city) cities++;
         }
       }
-      if (!pick) notFound.push(c.name);
+      if (!pick) {
+        notFound.push(c.name);
+        // Không có website nhưng Google Maps có địa chỉ: vẫn điền thành phố (trùng tên + thành phố với công ty khác thì bỏ qua).
+        if (city) {
+          const { error } = await ctx.db.from("companies").update({ city }).eq("id", c.id);
+          if (!error) cities++;
+        }
+      }
 
       const norm = phone ? normalizeVnPhone(phone) : null;
       if (norm) {
@@ -140,6 +153,7 @@ serve(async (req, body) => {
     checked: todo.length,
     found,
     phones,
+    cities,
     not_found: notFound.slice(0, 50),
     conflicts: conflicts.slice(0, 50),
     units_used: unitsUsed,
@@ -156,6 +170,7 @@ serve(async (req, body) => {
     checked: todo.length,
     found,
     phones,
+    cities,
     not_found: notFound,
     conflicts: conflicts.map((x) => `${x.name}: ${x.domain}`),
     units_used: unitsUsed,
