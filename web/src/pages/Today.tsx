@@ -17,6 +17,7 @@ import {
   fmtDay,
   fmtUsd,
   getCadence,
+  isTalking,
   leadRank,
   nextMove,
   todayIso,
@@ -24,6 +25,11 @@ import {
 } from "../lib/pipeline";
 import { EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
 import { DealPanel } from "../components/DealPanel";
+import { expiryText, fmtMoney, QUOTE_EXPIRY_WARN_DAYS, type Quote } from "../lib/quotes";
+
+type OpenQuote = Pick<Quote, "deal_id" | "number" | "valid_until" | "total" | "currency">;
+/** Khách đang chốt: gần ký nhất lên trước. */
+const HOT_RANK: Partial<Record<DealRow["stage"], number>> = { commit: 0, proposal: 1, meeting: 2, connected: 3 };
 
 interface Task {
   row: DealRow;
@@ -40,6 +46,7 @@ export function TodayPage() {
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState<DealRow[] | null>(null);
   const [renewals, setRenewals] = useState<DealRow[]>([]);
+  const [quotes, setQuotes] = useState<Map<string, OpenQuote>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [mine, setMine] = useState(() => rememberedFilter("today.mine") === "1");
   useEffect(() => rememberFilter("today.mine", mine ? "1" : ""), [mine]);
@@ -63,7 +70,7 @@ export function TodayPage() {
   const tab = (params.get("tab") as "qualify" | "touches" | null) ?? undefined;
 
   const load = useCallback(async () => {
-    const [openRes, wonRes] = await Promise.all([
+    const [openRes, wonRes, quoteRes] = await Promise.all([
       supabase.from("deal_board").select("*").in("stage", [...OPEN_STAGES, "nurture"]).limit(3000),
       supabase
         .from("deal_board")
@@ -72,10 +79,20 @@ export function TodayPage() {
         .not("renewal_at", "is", null)
         .lte("renewal_at", addDays(todayIso(), RENEWAL_WINDOW_DAYS))
         .order("renewal_at"),
+      supabase
+        .from("quotes")
+        .select("deal_id,number,valid_until,total,currency")
+        .eq("status", "sent")
+        .order("created_at", { ascending: false })
+        .limit(1000),
     ]);
     if (openRes.error || wonRes.error) setError((openRes.error ?? wonRes.error)!.message);
     setRows((openRes.data ?? []) as DealRow[]);
     setRenewals((wonRes.data ?? []) as DealRow[]);
+    // Báo giá mới nhất còn chờ của mỗi deal (lỗi bảng báo giá không chặn trang Hôm nay).
+    const m = new Map<string, OpenQuote>();
+    for (const q of (quoteRes.data ?? []) as OpenQuote[]) if (!m.has(q.deal_id)) m.set(q.deal_id, q);
+    setQuotes(m);
   }, []);
   useEffect(() => {
     void load();
@@ -88,13 +105,32 @@ export function TodayPage() {
   const t = todayIso();
   const isNew = (r: DealRow) => r.stage === "new" || r.stage === "research";
   const byDate = (a: Task, b: Task) => (a.date ?? "9") < (b.date ?? "9") ? -1 : (a.date ?? "9") > (b.date ?? "9") ? 1 : leadRank(a.row) - leadRank(b.row);
+  // Khách đang chốt luôn đứng trước khách đang tiếp cận: gần ký nhất làm trước.
+  const hotFirst = (a: Task, b: Task) => (HOT_RANK[a.row.stage] ?? 9) - (HOT_RANK[b.row.stage] ?? 9) || byDate(a, b);
+  const quoteNote = (r: DealRow) => {
+    const q = quotes.get(r.id);
+    return q ? `${q.number} ${fmtMoney(q.total, q.currency)} · ${expiryText(q.valid_until).text.replace("Báo giá ", "")}` : undefined;
+  };
   const task = (r: DealRow, action = "Làm"): Task => {
     const m = nextMove(r, cadence);
-    return { row: r, title: m.title, date: m.due, action, extra: m.channel ? CHANNEL_LABEL[m.channel] : undefined };
+    const hot = isTalking(r.stage);
+    const extra = hot
+      ? [r.est_arr_usd ? `ARR ${fmtUsd(r.est_arr_usd)}` : null, quoteNote(r)].filter(Boolean).join(" · ") || undefined
+      : m.channel ? CHANNEL_LABEL[m.channel] : undefined;
+    return { row: r, title: m.title, date: m.due, action, extra };
   };
 
   // Điểm chạm đến hạn (khách đã bắt đầu tiếp cận).
-  const due = scoped.filter((r) => !isNew(r) && r.next_action_at && r.next_action_at <= t).map((r) => task(r)).sort(byDate);
+  const dueRows = scoped.filter((r) => !isNew(r) && r.next_action_at && r.next_action_at <= t);
+  // Báo giá sắp hết hạn: kéo vào việc hôm nay dù việc đã hẹn ngày khác — hạn chót là lúc dễ chốt nhất.
+  const expiring = scoped
+    .filter((r) => isTalking(r.stage) && !dueRows.includes(r))
+    .filter((r) => {
+      const q = quotes.get(r.id);
+      return q && q.valid_until <= addDays(t, QUOTE_EXPIRY_WARN_DAYS);
+    })
+    .map((r): Task => ({ ...task(r), title: `Gọi chốt trước khi báo giá hết hạn`, date: t }));
+  const due = [...dueRows.map((r) => task(r)), ...expiring].sort(hotFirst);
   // Lead mới: mỗi ngày gửi email mở lời cho vài lead ưu tiên nhất.
   const allNew = scoped.filter(isNew).sort((a, b) => leadRank(a) - leadRank(b));
   const startedToday = scoped.filter((r) => r.stage === "outreach" && r.cadence_started_at === t).length;
@@ -102,11 +138,20 @@ export function TodayPage() {
   const todayNew = allNew.slice(0, quota).map((r) => ({ ...task(r, "Gửi email"), date: t }));
   const waitingNew = allNew.slice(quota);
   const todayTasks = [...due, ...todayNew];
+  const inToday = new Set(todayTasks.map((x) => x.row.id));
+  const hotRows = scoped.filter((r) => isTalking(r.stage));
+  const hotArr = hotRows.reduce((n, r) => n + (r.est_arr_usd ?? 0), 0);
+  const hotWaiting = hotRows
+    .filter((r) => !inToday.has(r.id))
+    .map((r) => task(r, "Mở"))
+    .sort(hotFirst);
   const soon = scoped
-    .filter((r) => !isNew(r) && r.next_action_at && r.next_action_at > t && r.next_action_at <= addDays(t, 3))
+    .filter((r) => !isNew(r) && !isTalking(r.stage) && r.next_action_at && r.next_action_at > t && r.next_action_at <= addDays(t, 3))
     .map((r) => task(r, "Mở"))
     .sort(byDate);
-  const noPlan = scoped.filter((r) => !isNew(r) && OPEN_STAGES.includes(r.stage) && !r.next_action_at).map((r) => task(r, "Đặt lịch"));
+  const noPlan = scoped
+    .filter((r) => !isNew(r) && !isTalking(r.stage) && OPEN_STAGES.includes(r.stage) && !r.next_action_at)
+    .map((r) => task(r, "Đặt lịch"));
   const renewTasks = renewals.map((r) => ({
     row: r,
     title: `Gọi chốt gia hạn${r.est_arr_usd ? ` · ARR ${fmtUsd(r.est_arr_usd)}` : ""}`,
@@ -173,6 +218,12 @@ export function TodayPage() {
                 {due.length} điểm chạm đến hạn · {todayNew.length} lead mới gửi email mở lời
                 {startedToday ? ` (đã gửi ${startedToday} hôm nay)` : ""}
               </div>
+              {hotRows.length > 0 && (
+                <div className="small hot-summary">
+                  Đang chốt <strong>{hotRows.length}</strong> khách{hotArr > 0 ? <> · ARR <strong>{fmtUsd(hotArr)}</strong></> : null} — làm trước
+                  tiên, gần ký nhất lên đầu.
+                </div>
+              )}
               <label className="row small per-day">
                 Lead mới mỗi ngày
                 <select className="input-sm" value={perDay} onChange={(e) => setPerDay(Number(e.target.value))}>
@@ -199,6 +250,15 @@ export function TodayPage() {
           </div>
 
           <TaskList title="Việc hôm nay" empty="Không còn việc nào hôm nay. Làm tốt lắm!" tasks={todayTasks} onOpen={(id) => open(id, "touches")} />
+          {hotWaiting.length > 0 && (
+            <TaskList
+              title="Khách đang chốt — chưa tới hạn"
+              hint="Khách đã trả lời, đang đi tới ký. Có tin mới thì mở ngay; báo giá sắp hết hạn sẽ tự lên Việc hôm nay."
+              empty=""
+              tasks={hotWaiting}
+              onOpen={(id) => open(id, "touches")}
+            />
+          )}
           {renewTasks.length > 0 && (
             <TaskList title={`Sắp gia hạn hợp đồng (${RENEWAL_WINDOW_DAYS} ngày tới)`} empty="" tasks={renewTasks} onOpen={(id) => open(id, "touches")} />
           )}

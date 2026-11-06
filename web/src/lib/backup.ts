@@ -31,7 +31,7 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 /** Toàn bộ dữ liệu bán hàng và cấu hình, đủ để dựng lại nếu database mất. Trả về số dòng. */
 export async function downloadBackup(): Promise<number> {
   const tables: Record<string, unknown[]> = {};
-  for (const t of ["deals", "activities", "contacts", "companies", "settings", "do_not_contact"]) {
+  for (const t of ["deals", "activities", "quotes", "contacts", "companies", "settings", "do_not_contact"]) {
     tables[t] = await all(t);
   }
   const rows = Object.values(tables).reduce((n, x) => n + x.length, 0);

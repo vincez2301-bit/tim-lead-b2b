@@ -91,6 +91,7 @@ phần riêng ngành “Dịch vụ B2B”:
 | Bài học “ô tiền” | Ô số của trình duyệt đọc sai “10.206” | **Đã sửa**: ô ARR đọc được 10.206 / 10,206 / $10,206 và hiện lại số đã hiểu |
 | Bài học “ngày và múi giờ” | Ngày lùi một ngày ở giờ Việt Nam | Đã đúng: mọi ngày tính theo giờ máy (`isoDate` bù múi giờ) |
 | VC-05 | Nhắc qua email / thông báo | **Đã thêm**: email nhắc việc mỗi sáng (`daily_digest` + `pg_cron`, gửi qua Resend) |
-| BG-01, BG-02, B2B-01 | Danh mục gói, báo giá PDF | Chưa có |
+| BG-01, BG-02, B2B-01 | Danh mục gói, báo giá PDF | **Mới thêm**: Cài đặt → Bảng giá; báo giá trong khung khách (bảng `quotes`, số tự sinh, tổng do database tính), trang in / lưu PDF, email gửi báo giá soạn sẵn |
+| — | Bước chốt theo giai đoạn | **Mới thêm**: sửa lỗi khách đã trả lời vẫn được gợi ý bước tiếp cận; bước 13–19 theo giai đoạn, tự chuyển giai đoạn, khung Tiến độ chốt (báo giá, khách đồng ý, đã ký) |
 | TH-02 | Đính kèm file (hợp đồng, đề xuất) | Chưa có |
 | MK-01 | Nhật ký đồng ý nhận tin | Chưa có; đang có danh sách loại trừ và xoá dữ liệu theo yêu cầu |

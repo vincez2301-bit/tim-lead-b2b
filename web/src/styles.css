@@ -2543,3 +2543,306 @@ dialog.dialog.disqualify {
 .search-form .exclude-box {
   margin-top: 0.9rem;
 }
+
+/* ---------------------------------------------------------------- Tiến độ chốt + báo giá */
+.close-plan {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--green-fg) 35%, var(--border));
+  background: color-mix(in srgb, var(--green-bg) 55%, var(--surface));
+}
+.close-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.close-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem 0.2rem 0.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.close-steps .dot {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--gray-bg);
+  color: var(--gray-fg);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.close-steps li.done {
+  color: var(--text);
+}
+.close-steps li.done .dot {
+  background: var(--green-fg);
+  color: #fff;
+}
+.close-steps li.current {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.close-steps li.current .dot {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.quote-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+.quote-line.urgent {
+  border-color: var(--orange-fg);
+  background: var(--orange-bg);
+  color: var(--orange-fg);
+}
+.quote-form {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.quote-lines {
+  display: grid;
+  gap: 0.5rem;
+}
+.quote-line-head,
+.quote-line-row,
+.price-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.5rem 7.5rem 4.5rem 2.25rem;
+  gap: 0.4rem;
+  align-items: start;
+}
+.price-rows {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+.price-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 8rem 5rem 2.25rem;
+}
+.stack-tight {
+  display: grid;
+  gap: 0.3rem;
+}
+.input-detail {
+  min-height: 32px;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.85rem;
+}
+select.quote-add {
+  max-width: 100%;
+  min-width: 14rem;
+}
+.quote-total {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+}
+.quote-total strong {
+  font-size: 1.1rem;
+}
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+.inline-form label {
+  min-width: 9rem;
+}
+.steps-inline {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+.plain-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.hot-summary {
+  margin-top: 0.3rem;
+  color: var(--green-fg);
+}
+@media (max-width: 640px) {
+  .quote-line-head {
+    display: none;
+  }
+  .quote-line-row {
+    grid-template-columns: 4rem minmax(0, 1fr) 4.5rem 2.25rem;
+  }
+  .price-row {
+    grid-template-columns: 1fr 1fr 2.25rem;
+  }
+  .quote-line-row > :first-child,
+  .price-row > :first-child,
+  .price-row > :nth-child(2) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------------------------------------------------------------- Trang in báo giá */
+.print-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 1rem;
+}
+.print-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 210mm;
+  margin: 0 auto 1rem;
+}
+.quote-doc {
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 18mm 16mm;
+  background: #fff;
+  color: #111;
+  box-shadow: var(--shadow);
+  font-size: 10.5pt;
+  line-height: 1.5;
+}
+.quote-doc .muted {
+  color: #555;
+}
+.quote-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 2px solid #111;
+}
+.quote-from {
+  font-size: 13pt;
+  font-weight: 700;
+}
+.quote-meta {
+  text-align: right;
+}
+.quote-meta h1 {
+  margin: 0 0 0.2rem;
+  font-size: 20pt;
+  letter-spacing: 0.06em;
+  color: #111;
+}
+.quote-to {
+  margin: 1rem 0;
+}
+.quote-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6rem 0;
+}
+.quote-table th,
+.quote-table td {
+  border: 1px solid #bbb;
+  padding: 0.4rem 0.5rem;
+  vertical-align: top;
+  text-align: left;
+  color: #111;
+  background: #fff;
+}
+.quote-table th {
+  background: #f1f1f1;
+  font-weight: 700;
+}
+.quote-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.quote-table tfoot td {
+  font-weight: 600;
+}
+.quote-table tr.grand td {
+  font-weight: 700;
+  font-size: 11.5pt;
+  background: #f7f7f7;
+}
+.quote-words {
+  font-style: italic;
+}
+.quote-doc h2 {
+  font-size: 11pt;
+  margin: 1rem 0 0.3rem;
+  color: #111;
+}
+.quote-sign {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+  text-align: center;
+}
+.quote-sign .sign-space {
+  height: 2.2cm;
+}
+@media (max-width: 640px) {
+  .print-page {
+    padding: 0.5rem;
+  }
+  .quote-doc {
+    padding: 1rem;
+  }
+  .quote-head {
+    flex-direction: column;
+  }
+  .quote-table-wrap {
+    overflow-x: auto;
+  }
+  .quote-doc {
+    font-size: 9.5pt;
+  }
+  .quote-meta {
+    text-align: left;
+  }
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-page {
+    padding: 0;
+    background: #fff;
+  }
+  .quote-doc {
+    max-width: none;
+    padding: 0;
+    box-shadow: none;
+  }
+  .quote-table tr {
+    break-inside: avoid;
+  }
+}

@@ -704,3 +704,36 @@ export async function requalifyCompanies(ids: string[]): Promise<number> {
   if (error) throw new Error(error.message);
   return Number(data ?? 0);
 }
+
+// ------------------------------------------------------------------ Chặng chốt (bước 13–19)
+/** Khách đã trả lời, đang đi tới ký. */
+export const TALKING_STAGES: Stage[] = ["connected", "meeting", "proposal", "commit"];
+export const isTalking = (s: Stage) => TALKING_STAGES.includes(s);
+/** Bước chặng chốt ứng với từng giai đoạn (lịch mặc định: 13 tìm hiểu nhu cầu … 19 ký). */
+const CLOSE_STEPS: Partial<Record<Stage, number[]>> = { connected: [13], meeting: [14, 15], proposal: [16, 17, 18], commit: [19] };
+/** Ghi xong bước này thì deal tiến tới giai đoạn này (chỉ tiến, không lùi). */
+const STEP_ADVANCE: Record<number, Stage> = { 13: "meeting", 15: "proposal" };
+/** Khoảng cách tối đa giữa hai bước chốt: khách đã trả lời thì không để nguội quá 3 ngày. */
+export const CLOSE_MAX_GAP = 3;
+export const QUOTE_STEP = 15;
+export const SIGN_STEP = 19;
+
+/** Bước chốt kế tiếp theo giai đoạn (không theo số điểm chạm): bước đầu tiên của giai đoạn chưa làm. */
+export function closeStep(cadence: CadenceStep[], stage: Stage, done: Set<number>): CadenceStep | null {
+  const steps = (CLOSE_STEPS[stage] ?? []).map((n) => cadence.find((c) => c.step === n)).filter((c): c is CadenceStep => !!c);
+  if (!steps.length) return null;
+  return steps.find((s) => !done.has(s.step)) ?? steps[steps.length - 1];
+}
+
+/** Giai đoạn sau khi ghi một bước chốt. Khách “Tích cực” khi đã có đề xuất = đồng ý, chờ ký. */
+export function stageAfterStep(stage: Stage, step: number | null, outcome: Outcome): Stage {
+  let next = (step && STEP_ADVANCE[step]) || stage;
+  if (outcome === "positive" && stage === "proposal") next = "commit";
+  return OPEN_STAGES.indexOf(next) > OPEN_STAGES.indexOf(stage) ? next : stage;
+}
+
+/** Hạn của bước chốt kế tiếp: theo khoảng cách trong lịch, tối thiểu 1, tối đa CLOSE_MAX_GAP ngày. */
+export function closeDue(prev: CadenceStep | null, next: CadenceStep): string {
+  const gap = prev ? next.day - prev.day : 1;
+  return addDays(todayIso(), Math.min(CLOSE_MAX_GAP, Math.max(1, gap)));
+}

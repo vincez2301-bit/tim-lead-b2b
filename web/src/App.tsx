@@ -1,8 +1,9 @@
-import { lazy } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { Suspense, lazy } from "react";
+import { Navigate, Outlet, Route, Routes } from "react-router";
 import { useAuth } from "./lib/auth";
 import { Layout } from "./components/Layout";
 import { Spinner } from "./components/ui";
+import { SettingsProvider } from "./lib/settings";
 import { LoginPage, MfaChallenge } from "./pages/Login";
 
 // Mỗi trang là một chunk riêng: lần đầu chỉ tải trang đang mở.
@@ -21,6 +22,7 @@ const CompanyDetailPage = page(() => import("./pages/CompanyDetail"), "CompanyDe
 const ImportPage = page(() => import("./pages/Import"), "ImportPage");
 const CohortPage = page(() => import("./pages/Cohort"), "CohortPage");
 const SettingsPage = page(() => import("./pages/Settings"), "SettingsPage");
+const QuotePrintPage = page(() => import("./pages/QuotePrint"), "QuotePrintPage");
 
 function Guard() {
   const { loading, session, needsMfa } = useAuth();
@@ -28,6 +30,21 @@ function Guard() {
   if (!session) return <Navigate to="/login" replace />;
   if (needsMfa) return <MfaChallenge />;
   return <Layout />;
+}
+
+/** Trang in (báo giá): cần đăng nhập nhưng không có menu. */
+function PrintGuard() {
+  const { loading, session, needsMfa } = useAuth();
+  if (loading) return <main className="content"><Spinner /></main>;
+  if (!session) return <Navigate to="/login" replace />;
+  if (needsMfa) return <MfaChallenge />;
+  return (
+    <SettingsProvider>
+      <Suspense fallback={<main className="content"><Spinner /></main>}>
+        <Outlet />
+      </Suspense>
+    </SettingsProvider>
+  );
 }
 
 export function App() {
@@ -38,6 +55,9 @@ export function App() {
         path="/login"
         element={!loading && session && !needsMfa ? <Navigate to="/" replace /> : <LoginPage />}
       />
+      <Route element={<PrintGuard />}>
+        <Route path="quotes/:id" element={<QuotePrintPage />} />
+      </Route>
       <Route element={<Guard />}>
         <Route index element={<TodayPage />} />
         <Route path="today" element={<Navigate to="/" replace />} />

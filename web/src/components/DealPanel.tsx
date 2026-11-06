@@ -51,6 +51,11 @@ import {
   getCriteria,
   memberName,
   nextStep,
+  closeStep,
+  closeDue,
+  isTalking,
+  stageAfterStep,
+  QUOTE_STEP,
   suggestTier,
   todayIso,
   useMembers,
@@ -67,6 +72,7 @@ import {
 import { Badge, CopyButton, Notice, ScorePill, Spinner } from "./ui";
 import { SafeLink, shortUrl } from "./SafeLink";
 import { DisqualifyDialog } from "./Disqualify";
+import { ClosePlan, type LogFn } from "./ClosePlan";
 
 interface ContactRow {
   id: string;
@@ -537,7 +543,10 @@ function TouchesTab({
   setInfo: (s: string | null) => void;
   onLogged?: () => void;
 }) {
-  const step = nextStep(cadence, acts.length);
+  const talking = isTalking(deal.stage);
+  const doneSteps = useMemo(() => new Set(acts.map((a) => a.step).filter((n): n is number => n !== null)), [acts]);
+  // Khách đã trả lời: bước kế tiếp theo giai đoạn (13–19), không theo số điểm chạm.
+  const step = talking ? (closeStep(cadence, deal.stage, doneSteps) ?? nextStep(cadence, acts.length)) : nextStep(cadence, acts.length);
   const [channel, setChannel] = useState<Channel>(step?.channel ?? "email");
   const [outcome, setOutcome] = useState<Outcome>("done");
   const [contactId, setContactId] = useState("");
@@ -558,11 +567,23 @@ function TouchesTab({
     await log({ channel, outcome, note: note.trim() || null, contactId: contactId || null, date });
   }
 
-  async function log(a: { channel: Channel; outcome: Outcome; note: string | null; contactId: string | null; date: string }) {
+  async function log(a: {
+    channel: Channel;
+    outcome: Outcome;
+    note: string | null;
+    contactId: string | null;
+    date: string;
+    /** Bước ghi vào điểm chạm (mặc định: bước đang hiện). */
+    step?: number | null;
+    /** Ghi đè việc tiếp theo / giai đoạn app tự tính. */
+    patch?: Partial<Deal>;
+    msg?: string;
+  }) {
     if (!userId) return;
     setBusy(true);
     setError(null);
     const outcome = a.outcome;
+    const logStep = a.step !== undefined ? a.step : (deal.stage === "outreach" || preQualified || talking) && step ? step.step : null;
     try {
       const ins = await supabase.from("activities").insert({
         deal_id: deal.id,
@@ -571,7 +592,7 @@ function TouchesTab({
         outcome,
         note: a.note,
         contact_id: a.contactId,
-        step: (deal.stage === "outreach" || preQualified) && step ? step.step : null,
+        step: logStep,
         happened_at: a.date === todayIso() ? new Date().toISOString() : `${a.date}T09:00:00+07:00`,
       });
       if (ins.error) throw ins.error;
@@ -580,8 +601,9 @@ function TouchesTab({
       let p: Partial<Deal>;
       let msg: string;
       if ((outcome === "replied" || outcome === "positive") && ["new", "research", "outreach", "nurture"].includes(deal.stage)) {
-        p = { stage: "connected", next_action: "Hẹn buổi tìm hiểu nhu cầu", next_action_at: addDays(todayIso(), 1) };
-        msg = "Khách đã phản hồi → chuyển sang Đã phản hồi. Việc tiếp theo: hẹn buổi tìm hiểu nhu cầu.";
+        // Trả lời trong ngày: khách vừa trả lời là lúc dễ hẹn lịch nhất.
+        p = { stage: "connected", next_action: "Hẹn buổi tìm hiểu nhu cầu", next_action_at: todayIso() };
+        msg = "Khách đã phản hồi → Đã phản hồi. Việc ngay hôm nay: hẹn buổi tìm hiểu nhu cầu (mẫu email ở bước 13).";
       } else if (deal.stage === "nurture") {
         const re = deal.lost_reason_code ? reengageDate(deal.lost_reason_code, deal.contract_end, budgetMonth) : addDays(todayIso(), 90);
         const monthly = addDays(todayIso(), 30);
@@ -589,6 +611,18 @@ function TouchesTab({
           ? { next_action: `Liên hệ lại: ${deal.lost_reason_code ? LOST_REASON_LABEL[deal.lost_reason_code] : "nuôi dưỡng"}`, next_action_at: re }
           : { next_action: "Điểm chạm nuôi dưỡng hằng tháng (playlist / tin bản quyền)", next_action_at: monthly };
         msg = `Đã ghi điểm chạm nuôi dưỡng. Lần tới: ${fmtDay(p.next_action_at ?? null)}.`;
+      } else if (talking) {
+        // Chặng chốt: tiến giai đoạn theo bước vừa làm, hẹn bước kế tiếp tối đa 3 ngày.
+        const newStage = stageAfterStep(deal.stage, logStep, outcome);
+        const done = new Set(doneSteps);
+        if (logStep) done.add(logStep);
+        const cur = logStep ? (cadence.find((c) => c.step === logStep) ?? null) : null;
+        const nxt = closeStep(cadence, newStage, done);
+        p = nxt
+          ? { next_action: nxt.title, next_action_at: closeDue(cur, nxt) }
+          : { next_action: deal.next_action ?? "Chọn việc tiếp theo", next_action_at: addDays(todayIso(), 2) };
+        if (newStage !== deal.stage) p = { ...p, stage: newStage };
+        msg = `Đã ghi.${newStage !== deal.stage ? ` Chuyển sang ${STAGE_LABEL[newStage]}.` : ""} Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`;
       } else {
         const nxt = nextStep(cadence, touches);
         p = nxt
@@ -600,6 +634,8 @@ function TouchesTab({
           ? `Đã bắt đầu tiếp cận ${deal.company_name}. Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`
           : `Đã ghi điểm chạm ${touches}/${TOUCH_GOAL}. Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`;
       }
+      if (a.patch) p = { ...p, ...a.patch };
+      if (a.msg) msg = a.msg;
       const up = await supabase.from("deals").update(p).eq("id", deal.id);
       if (up.error) throw up.error;
       setNote("");
@@ -659,6 +695,18 @@ function TouchesTab({
           <span className="small muted">Trả lời để từ chối thì bấm “Khách từ chối…” ở trên.</span>
         </div>
       )}
+      {talking && (
+        <ClosePlan
+          deal={deal}
+          acts={acts}
+          cadence={cadence}
+          contacts={contacts}
+          sender={sender}
+          busy={busy}
+          setError={setError}
+          log={((x) => log({ ...x, date: todayIso() })) as LogFn}
+        />
+      )}
       {step && (
         <div className="next-step">
           <span className="badge badge-blue">Bước {step.step}</span>
@@ -668,7 +716,7 @@ function TouchesTab({
           </div>
         </div>
       )}
-      {composeStep && (
+      {composeStep && !(talking && composeStep.step === QUOTE_STEP) && (
         <Compose
           key={`${deal.id}-${composeStep.step}`}
           deal={deal}
@@ -1289,7 +1337,7 @@ function Compose({
           </>
         ) : (
           <button type="button" className="btn-primary" disabled={busy} onClick={() => onSent(ch, "done", note, contactId || null)}>
-            ✓ Đã gửi
+            {ch === "meeting" ? "✓ Đã làm xong" : "✓ Đã gửi"}
           </button>
         )}
       </div>

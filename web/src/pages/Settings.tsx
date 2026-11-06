@@ -9,7 +9,9 @@ import type { Profile, Role } from "../lib/db-types";
 import { errMsg, fmtDate } from "../lib/format";
 import { Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { confirmDialog } from "../components/dialog";
-import { getSender, signature, type Sender } from "../lib/pipeline";
+import { getSender, parseAmount, signature, type Sender } from "../lib/pipeline";
+import { fmtMoney, getPriceBook, type Currency, type PriceBook } from "../lib/quotes";
+import { Plus, Trash2 } from "lucide-react";
 import { downloadBackup, downloadPipelineCsv } from "../lib/backup";
 import { SignalsPage } from "./Signals";
 import { DncPage } from "./Dnc";
@@ -19,6 +21,11 @@ const KEY_INFO: Record<string, { label: string; help: string; shape: "array" | "
   sender: {
     label: "Thông tin người gửi",
     help: 'Dùng cho chữ ký trong nội dung soạn sẵn: {"name":"Tên bạn","title":"Account Manager","company":"Bigfish Agency","phone":"09…"}.',
+    shape: "object",
+  },
+  price_book: {
+    label: "Bảng giá",
+    help: 'Điền sẵn báo giá: {"currency":"USD","usd_vnd":26000,"valid_days":14,"items":[{"name":"…","detail":"…","unit_price":2400,"unit":"năm"}],"terms":"…"}.',
     shape: "object",
   },
   message_templates: {
@@ -455,6 +462,106 @@ function SenderForm({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+interface PriceRowDraft {
+  name: string;
+  detail: string;
+  price: string;
+  unit: string;
+}
+
+function PriceBookForm({ isAdmin }: { isAdmin: boolean }) {
+  const { settings, save } = useSettings();
+  const init = getPriceBook(settings);
+  const [currency, setCurrency] = useState<Currency>(init.currency);
+  const [rate, setRate] = useState(String(init.usd_vnd));
+  const [days, setDays] = useState(String(init.valid_days));
+  const [terms, setTerms] = useState(init.terms);
+  const [rows, setRows] = useState<PriceRowDraft[]>(() =>
+    init.items.map((it) => ({ name: it.name, detail: it.detail ?? "", price: String(it.unit_price), unit: it.unit ?? "năm" })),
+  );
+  const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const set = (i: number, k: keyof PriceRowDraft) => (e: { target: { value: string } }) =>
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: e.target.value } : r)));
+
+  async function submit() {
+    setMsg(null);
+    const items: PriceBook["items"] = [];
+    for (const [i, r] of rows.entries()) {
+      if (!r.name.trim() && !r.price.trim()) continue;
+      const price = parseAmount(r.price);
+      if (!r.name.trim() || price === null) return setMsg({ kind: "error", text: `Dòng ${i + 1}: cần tên gói và đơn giá (ví dụ 2400 hoặc 2.400).` });
+      items.push({ name: r.name.trim(), ...(r.detail.trim() ? { detail: r.detail.trim() } : {}), unit_price: price, unit: r.unit.trim() || "năm" });
+    }
+    const usdVnd = parseAmount(rate);
+    const validDays = Number(days);
+    if (!usdVnd || usdVnd < 1000) return setMsg({ kind: "error", text: "Tỷ giá USD/VND chưa đúng (ví dụ 26.000)." });
+    if (!Number.isInteger(validDays) || validDays < 1 || validDays > 180) return setMsg({ kind: "error", text: "Số ngày hiệu lực từ 1 đến 180." });
+    const v: PriceBook = { currency, usd_vnd: usdVnd, valid_days: validDays, items, terms };
+    const err = await save("price_book", v);
+    setMsg(err ? { kind: "error", text: err } : { kind: "ok", text: `Đã lưu bảng giá (${items.length} gói).` });
+  }
+
+  return (
+    <div className="card">
+      <h2>Bảng giá</h2>
+      <p className="small muted">
+        Dùng để tạo báo giá nhanh trong khung khách (tab Điểm chạm → Tiến độ chốt). Giá chỉ lưu trong database của bạn, không nằm trong mã nguồn.
+      </p>
+      <div className="price-rows">
+        {rows.map((r, i) => (
+          <div key={i} className="price-row">
+            <input aria-label={`Tên gói ${i + 1}`} value={r.name} disabled={!isAdmin} onChange={set(i, "name")} placeholder="Tên gói" />
+            <input aria-label={`Mô tả gói ${i + 1}`} value={r.detail} disabled={!isAdmin} onChange={set(i, "detail")} placeholder="Mô tả: số người dùng, kênh…" />
+            <input aria-label={`Đơn giá gói ${i + 1}`} inputMode="decimal" value={r.price} disabled={!isAdmin} onChange={set(i, "price")} placeholder={`Đơn giá (${currency})`} />
+            <input aria-label={`Đơn vị gói ${i + 1}`} value={r.unit} disabled={!isAdmin} onChange={set(i, "unit")} placeholder="năm" />
+            <button type="button" className="btn-icon" aria-label={`Xoá gói ${i + 1}`} disabled={!isAdmin} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>
+              <Trash2 />
+            </button>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="small muted">Chưa có gói nào. Vẫn tạo được báo giá bằng cách gõ tay từng dòng.</p>}
+      </div>
+      <div className="row">
+        <button type="button" className="btn-sm" disabled={!isAdmin || rows.length >= 30} onClick={() => setRows((rs) => [...rs, { name: "", detail: "", price: "", unit: "năm" }])}>
+          <Plus aria-hidden="true" /> Thêm gói
+        </button>
+      </div>
+      <div className="form-grid">
+        <label>
+          Tiền tệ mặc định
+          <select value={currency} disabled={!isAdmin} onChange={(e) => setCurrency(e.target.value as Currency)}>
+            <option value="USD">USD</option>
+            <option value="VND">VND</option>
+          </select>
+        </label>
+        <label>
+          Tỷ giá USD/VND (quy đổi ARR)
+          <input inputMode="decimal" value={rate} disabled={!isAdmin} onChange={(e) => setRate(e.target.value)} />
+        </label>
+        <label>
+          Báo giá có hiệu lực (ngày)
+          <input inputMode="numeric" value={days} disabled={!isAdmin} onChange={(e) => setDays(e.target.value)} />
+        </label>
+      </div>
+      <label>
+        Điều khoản mặc định
+        <textarea rows={4} value={terms} disabled={!isAdmin} onChange={(e) => setTerms(e.target.value)} />
+      </label>
+      <div className="row">
+        <button type="button" className="btn-primary" disabled={!isAdmin} onClick={() => void submit()}>
+          Lưu bảng giá
+        </button>
+        {rows[0]?.name && parseAmount(rows[0].price) !== null && (
+          <span className="small muted">
+            Ví dụ: {rows[0].name} — {fmtMoney(parseAmount(rows[0].price), currency)}/{rows[0].unit || "năm"}
+          </span>
+        )}
+      </div>
+      {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
+    </div>
+  );
+}
+
 function BackupSection() {
   const [busy, setBusy] = useState<"" | "json" | "csv">("");
   const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -631,7 +738,7 @@ function GeneralSettings() {
   const ordered = [
     ...Object.keys(KEY_INFO).filter((k) => rows.some((r) => r.key === k)),
     ...rows.map((r) => r.key).filter((k) => !(k in KEY_INFO)),
-  ].filter((k) => k !== "sender");
+  ].filter((k) => k !== "sender" && k !== "price_book");
   const retention = Number((settings["retention"] as { months?: number } | undefined)?.months ?? 12);
 
   return (
@@ -640,6 +747,7 @@ function GeneralSettings() {
       {!isAdmin && <Notice kind="info">Chỉ admin được sửa cài đặt. Vai trò của bạn: {profile?.role ?? "user"}.</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       <SenderForm isAdmin={isAdmin} />
+      <PriceBookForm isAdmin={isAdmin} />
       <DigestSection isAdmin={isAdmin} />
       <BackupSection />
       <MfaSection />
