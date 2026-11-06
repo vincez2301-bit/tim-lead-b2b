@@ -21,6 +21,11 @@ export interface CrawlOptions {
   timeoutMs: number;
   userAgent: string;
   deadline: number; // epoch ms — không bắt đầu request mới sau thời điểm này
+  /**
+   * Loại trang chỉ lấy khi trang chủ có link tới (không đọc sitemap, không đoán /team, /doi-ngu…).
+   * Mỗi lần đoán sai tốn một request + thời gian nghỉ giữa hai request (mặc định 1,5 giây).
+   */
+  linkOnly?: Exclude<PageKind, "home" | "other">[];
   resolver?: Resolver;
   fetchImpl?: typeof fetch;
   sleepImpl?: (ms: number) => Promise<void>;
@@ -217,11 +222,15 @@ export async function crawlSite(
 
   for (const kind of wantKinds) {
     if (result.pages.length >= opts.maxPages) break;
-    if (!(candidates.get(kind)?.length)) await loadSitemap();
+    const linkOnly = opts.linkOnly?.includes(kind) ?? false;
+    if (!(candidates.get(kind)?.length) && !linkOnly) await loadSitemap();
     const list = [...(candidates.get(kind) ?? [])];
     // Ưu tiên URL có đường dẫn khớp mẫu của loại trang, ngắn trước.
     list.sort((a, b) => Number(KIND_PATTERNS[kind].test(b)) - Number(KIND_PATTERNS[kind].test(a)) || a.length - b.length);
-    if (!list.length) list.push(...DEFAULT_PATHS[kind].map((p) => finalOrigin + p));
+    if (!list.length) {
+      if (linkOnly) continue;
+      list.push(...DEFAULT_PATHS[kind].map((p) => finalOrigin + p));
+    }
     for (const url of list.slice(0, 2)) {
       if (result.pages.length >= opts.maxPages || f.attempts >= opts.maxAttempts || !f.timeLeft()) break;
       const key = url.replace(/\/$/, "");

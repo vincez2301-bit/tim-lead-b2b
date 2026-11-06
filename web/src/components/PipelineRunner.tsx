@@ -12,12 +12,13 @@ interface StepView {
   summary: string;
 }
 
-const ALL_STEPS: BatchFn[] = ["profile", "enrich_youtube", "enrich_contact"];
+// Bước đọc website tìm luôn người liên hệ, nên không chạy enrich_contact (đọc lại cùng các trang) nữa.
+const ALL_STEPS: BatchFn[] = ["profile", "enrich_youtube"];
 
 function summarize(fn: BatchFn, responses: unknown[]): string {
   if (fn === "profile") {
     const r = responses as ProfileResponse[];
-    return `Đã xử lý ${sumField(r, "processed")}, lỗi website ${sumField(r, "failed")}, bỏ qua ${sumField(r, "skipped")}, ${sumField(r, "observations")} observation mới.`;
+    return `Đã xử lý ${sumField(r, "processed")}, lỗi website ${sumField(r, "failed")}, bỏ qua ${sumField(r, "skipped")}, ${sumField(r, "observations")} observation mới, ${sumField(r, "contacts")} liên hệ (${sumField(r, "decision_makers")} người quyết định).`;
   }
   if (fn === "enrich_youtube") {
     const r = responses as EnrichYoutubeResponse[];
@@ -28,7 +29,7 @@ function summarize(fn: BatchFn, responses: unknown[]): string {
 }
 
 /**
- * Chạy lần lượt profile → enrich_youtube → enrich_contact cho danh sách công ty, theo lô nhỏ
+ * Chạy lần lượt profile (kèm tìm liên hệ) → enrich_youtube cho danh sách công ty, theo lô nhỏ
  * (mục 10.3: chạy theo lô để không vượt giới hạn thời gian của Edge Function).
  */
 export function PipelineRunner({
@@ -123,7 +124,7 @@ export function PipelineRunner({
         </div>
       </div>
       <p className="muted small">
-        Đọc website → kênh YouTube → tìm email, người phụ trách → chấm điểm. Mỗi lượt {batchSize} công ty; có thể để chạy, xong sẽ báo.
+        Đọc website (tìm luôn email, người phụ trách) → kênh YouTube → chấm điểm. Mỗi lượt {batchSize} công ty; có thể để chạy, xong sẽ báo.
       </p>
       <ul className="steps">
         {steps.map((fn) => {

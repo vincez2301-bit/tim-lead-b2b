@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { supabase } from "../lib/supabase";
 import { callFn, runBatched, type BatchFn } from "../lib/api";
-import type { ScoreResponse } from "../lib/api-types";
+import type { EnrichContactResponse, ProfileResponse, ScoreResponse } from "../lib/api-types";
 import type { Company, Contact, Observation, SignalCode } from "../lib/db-types";
 import { HINT_SIGNALS, SEGMENT_LABEL, STEP_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { Badge, EmailLabelBadge, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
@@ -80,8 +80,14 @@ export function CompanyDetailPage() {
         const r = await callFn<ScoreResponse>("score", { company_ids: [id] });
         setActionMsg({ kind: "ok", text: `Đã tính lại điểm (${r.updated}).` });
       } else {
-        const r = await runBatched(a, [id], 1);
+        const r = await runBatched<EnrichContactResponse & ProfileResponse>(a, [id], 1);
+        const found = r.responses[0];
         if (r.error) setActionMsg({ kind: "error", text: r.error });
+        else if (found && a !== "enrich_youtube" && typeof found.contacts === "number")
+          setActionMsg({
+            kind: "ok",
+            text: `${STEP_LABEL[a]}: xong — ${found.contacts} liên hệ${found.decision_makers ? `, ${found.decision_makers} người quyết định` : ""}.`,
+          });
         else if (r.stoppedReason === "quota")
           setActionMsg({ kind: "warn", text: "Hết quota YouTube hôm nay — tiếp tục từ Nhật ký sau khi quota đặt lại." });
         else if (r.stoppedReason === "stalled")
@@ -179,6 +185,13 @@ export function CompanyDetailPage() {
             </button>
           ))}
         </div>
+        {busy && busy !== "score" && (
+          <p className="small muted">
+            {busy === "enrich_youtube"
+              ? "Đang tìm kênh YouTube…"
+              : "Đang đọc trang chủ, Liên hệ, Giới thiệu của website (thường 5–10 giây; app nghỉ giữa các trang để không làm phiền website của khách)…"}
+          </p>
+        )}
         {actionMsg && <Notice kind={actionMsg.kind}>{actionMsg.text}</Notice>}
       </div>
 

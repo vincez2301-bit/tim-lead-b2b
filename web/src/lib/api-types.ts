@@ -84,6 +84,9 @@ export interface ProfileResponse {
   failed: number; // không truy cập được website
   skipped: number; // DNC / không có domain / bị robots.txt chặn
   observations: number;
+  /** Người liên hệ tìm được trong cùng lượt đọc website. */
+  contacts: number;
+  decision_makers: number;
   remaining_ids: string[];
 }
 export interface EnrichContactResponse {

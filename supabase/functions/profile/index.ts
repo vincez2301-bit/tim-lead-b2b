@@ -1,4 +1,5 @@
 // profile — đọc website công khai của công ty bằng regex, ghi observations (mục 4.2).
+// Cùng lượt đọc này tìm luôn người liên hệ (không phải đọc lại website ở bước enrich_contact).
 import { json, pool, serve, uuidList } from "../_shared/http.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { must } from "../_shared/db.ts";
@@ -9,6 +10,7 @@ import { extractSite, type Finding } from "../_shared/extract.ts";
 import { homeUrlFor } from "../_shared/domain.ts";
 import { confirmedSignals, insertObservations, recomputeScores } from "../_shared/signals.ts";
 import { loadDnc } from "../_shared/dnc.ts";
+import { mxCache, saveContacts } from "../_shared/contacts.ts";
 import type { ProfileResponse } from "../_shared/types.ts";
 
 interface Company {
@@ -27,14 +29,15 @@ serve(async (req, body) => {
 
   const deadline = Date.now() + settings.crawl.time_budget_ms;
   const runId = await startRun(ctx, "profile", { company_ids: ids });
-  const companies = must(
-    await ctx.db.from("companies").select("id, name, domain, website_url, status").in("id", ids),
-    "Đọc companies",
-  ) as Company[];
-  const confirmed = await confirmedSignals(ctx.db);
-  const dnc = await loadDnc(ctx.db);
+  const [companiesRes, confirmed, dnc] = await Promise.all([
+    ctx.db.from("companies").select("id, name, domain, website_url, status").in("id", ids),
+    confirmedSignals(ctx.db),
+    loadDnc(ctx.db),
+  ]);
+  const companies = must(companiesRes, "Đọc companies") as Company[];
+  const mxOf = mxCache();
 
-  let processed = 0, failed = 0, skipped = 0, observations = 0;
+  let processed = 0, failed = 0, skipped = 0, observations = 0, contacts = 0, decisionMakers = 0;
   const remaining: string[] = [];
   const errors: { company: string; url: string; error: string }[] = [];
   const touched: string[] = [];
@@ -55,6 +58,7 @@ serve(async (req, body) => {
         "about",
         "careers",
         "portfolio",
+        "team",
       ], {
         delayMs: settings.crawl.delay_ms,
         maxPages: settings.crawl.max_pages_per_company,
@@ -62,6 +66,7 @@ serve(async (req, body) => {
         timeoutMs: settings.crawl.timeout_ms,
         userAgent: settings.crawl.user_agent,
         deadline,
+        linkOnly: ["team"],
       });
       for (const e of crawl.errors.slice(0, 10)) errors.push({ company: c.domain, ...e });
 
@@ -102,10 +107,20 @@ serve(async (req, body) => {
         },
       ];
       observations += await insertObservations(ctx.db, c.id, findings, confirmed, runId);
+      const saved = await saveContacts(ctx.db, { id: c.id, domain: c.domain }, crawl.pages, crawl.homeUrl!, {
+        dnc,
+        confirmed,
+        runId,
+        mxOf,
+      });
+      contacts += saved.contacts;
+      decisionMakers += saved.decisionMakers;
+      const now = new Date().toISOString();
       must(
         await ctx.db.from("companies").update({
           status: c.status === "enriched" ? "enriched" : "profiled",
-          profiled_at: new Date().toISOString(),
+          profiled_at: now,
+          contacts_enriched_at: now,
           website_url: crawl.homeUrl,
         }).eq("id", c.id),
         "Cập nhật company",
@@ -120,13 +135,22 @@ serve(async (req, body) => {
 
   if (touched.length) await recomputeScores(ctx.db, touched);
 
-  const stats = { processed, failed, skipped, observations, remaining: remaining.length, fetch_errors: errors.slice(0, 50) };
+  const stats = { processed, failed, skipped, observations, contacts, decision_makers: decisionMakers, remaining: remaining.length, fetch_errors: errors.slice(0, 50) };
   await finishRun(ctx.db, runId, remaining.length ? "partial" : "done", stats, {
     progress: remaining.length ? { remaining_ids: remaining } : null,
     error: errors.length ? `${errors.length} lỗi tải trang (xem stats.fetch_errors)` : null,
   });
   await audit(ctx.db, ctx.userId, "run.profile", { run_id: runId, companies: ids.length, processed, failed, skipped });
 
-  const res: ProfileResponse = { run_id: runId, processed, failed, skipped, observations, remaining_ids: remaining };
+  const res: ProfileResponse = {
+    run_id: runId,
+    processed,
+    failed,
+    skipped,
+    observations,
+    contacts,
+    decision_makers: decisionMakers,
+    remaining_ids: remaining,
+  };
   return json(res);
 });

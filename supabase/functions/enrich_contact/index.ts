@@ -6,12 +6,10 @@ import { must } from "../_shared/db.ts";
 import { loadSettings } from "../_shared/settings.ts";
 import { assertConcurrency, audit, finishRun, startRun } from "../_shared/runs.ts";
 import { crawlSite } from "../_shared/crawler.ts";
-import { extractEmails, extractPhones, type FoundValue } from "../_shared/extract.ts";
 import { homeUrlFor } from "../_shared/domain.ts";
-import { buildContacts, findDecisionMakers } from "../_shared/people.ts";
-import { mxStatus, type MxStatus } from "../_shared/mx.ts";
 import { loadDnc } from "../_shared/dnc.ts";
-import { confirmedSignals, insertObservations, recomputeScores } from "../_shared/signals.ts";
+import { CONTACT_KINDS, mxCache, saveContacts } from "../_shared/contacts.ts";
+import { confirmedSignals, recomputeScores } from "../_shared/signals.ts";
 import type { EnrichContactResponse } from "../_shared/types.ts";
 
 interface Company {
@@ -29,17 +27,14 @@ serve(async (req, body) => {
 
   const deadline = Date.now() + settings.crawl.time_budget_ms;
   const runId = await startRun(ctx, "enrich_contact", { company_ids: ids });
-  const companies = must(
-    await ctx.db.from("companies").select("id, domain, website_url, status").in("id", ids),
-    "Đọc companies",
-  ) as Company[];
-  const confirmed = await confirmedSignals(ctx.db);
-  const dnc = await loadDnc(ctx.db);
-  const mxCache = new Map<string, Promise<MxStatus>>();
-  const mxOf = (d: string) => {
-    if (!mxCache.has(d)) mxCache.set(d, mxStatus(d));
-    return mxCache.get(d)!;
-  };
+  // Ba truy vấn độc lập: chạy song song.
+  const [companiesRes, confirmed, dnc] = await Promise.all([
+    ctx.db.from("companies").select("id, domain, website_url, status").in("id", ids),
+    confirmedSignals(ctx.db),
+    loadDnc(ctx.db),
+  ]);
+  const companies = must(companiesRes, "Đọc companies") as Company[];
+  const mxOf = mxCache();
 
   let processed = 0, contactsTotal = 0, decisionMakers = 0;
   const remaining: string[] = [];
@@ -53,69 +48,32 @@ serve(async (req, body) => {
     }
     if (!c.domain || dnc.isDomain(c.domain) || c.status === "archived" || c.status === "unreachable") return;
     try {
-      const crawl = await crawlSite(c.domain, homeUrlFor(c.domain, c.website_url), ["team", "about", "contact"], {
+      const crawl = await crawlSite(c.domain, homeUrlFor(c.domain, c.website_url), [...CONTACT_KINDS], {
         delayMs: settings.crawl.delay_ms,
         maxPages: 4,
         maxAttempts: settings.crawl.max_attempts_per_company,
         timeoutMs: settings.crawl.timeout_ms,
         userAgent: settings.crawl.user_agent,
         deadline,
+        linkOnly: ["team"],
       });
       if (!crawl.ok) {
         errors.push(`${c.domain}: ${crawl.errors.map((e) => e.error).join(", ") || "không truy cập được"}`);
         return;
       }
-
-      const people = findDecisionMakers(crawl.pages);
-      const emailMap = new Map<string, FoundValue>();
-      for (const e of crawl.pages.flatMap(extractEmails)) {
-        if (dnc.isEmail(e.value)) continue; // DNC email: không lưu
-        const prev = emailMap.get(e.value);
-        if (!prev || prev.confidence < e.confidence) emailMap.set(e.value, e);
-      }
-      const emails = [...emailMap.values()].sort((a, b) => b.confidence - a.confidence).slice(0, 10);
-      const phones = [...new Set(crawl.pages.flatMap(extractPhones).map((p) => p.value))].slice(0, 3);
-
-      // MX cho mọi domain email liên quan (domain công ty + domain email công khai)
-      const domains = new Set([c.domain, ...emails.map((e) => e.value.split("@")[1])]);
-      const mx = new Map<string, MxStatus>();
-      for (const d of domains) mx.set(d, await mxOf(d));
-
-      const drafts = buildContacts(c.domain, people, emails, phones, (d) => mx.get(d) ?? "unknown")
-        .filter((d) => !dnc.isEmail(d.email));
-
-      // Thay danh sách liên hệ tự động cũ; giữ liên hệ nhập tay.
-      must(await ctx.db.from("contacts").delete().eq("company_id", c.id).eq("source", "auto"), "Xoá contacts cũ");
-      if (drafts.length) {
-        must(
-          await ctx.db.from("contacts").insert(drafts.map((d) => ({
-            company_id: c.id,
-            full_name: d.full_name,
-            job_title: d.job_title,
-            email: d.email,
-            email_label: d.email_label,
-            phone: d.phone,
-            confidence: d.confidence,
-            source: "auto",
-            evidence_url: d.evidence_url,
-          }))),
-          "Ghi contacts",
-        );
-      }
-      await insertObservations(ctx.db, c.id, [{
-        code: "DECISION_MAKER_FOUND",
-        value_num: people.length,
-        value_text: people.map((p) => `${p.full_name} — ${p.job_title}`).join("\n") || null,
-        confidence: people.length ? Math.max(...people.map((p) => p.confidence)) : 0.7,
-        evidence_url: people[0]?.evidence_url ?? crawl.homeUrl!,
-      }], confirmed, runId);
+      const saved = await saveContacts(ctx.db, { id: c.id, domain: c.domain }, crawl.pages, crawl.homeUrl!, {
+        dnc,
+        confirmed,
+        runId,
+        mxOf,
+      });
       must(
         await ctx.db.from("companies").update({ contacts_enriched_at: new Date().toISOString() }).eq("id", c.id),
         "Cập nhật company",
       );
       processed++;
-      contactsTotal += drafts.length;
-      decisionMakers += people.length;
+      contactsTotal += saved.contacts;
+      decisionMakers += saved.decisionMakers;
       touched.push(c.id);
     } catch (e) {
       errors.push(`${c.domain}: ${(e as Error).message}`.slice(0, 300));

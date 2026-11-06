@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { applyPattern, buildContacts, findDecisionMakers, isRoleEmail, matchPattern } from "../_shared/people.ts";
 import { countSince, parseChannelUrl, QuotaExceededError, YoutubeClient } from "../_shared/youtube.ts";
 import { crawlSite } from "../_shared/crawler.ts";
+import { mxStatus } from "../_shared/mx.ts";
 
 Deno.test("findDecisionMakers: tên Việt gần chức danh, cùng dòng hoặc dòng kề", () => {
   const people = findDecisionMakers([{
@@ -134,4 +135,47 @@ Deno.test("crawlSite: domain không phân giải → dnsFail", async () => {
   });
   assert(!res.ok);
   assert(res.dnsFail);
+});
+
+Deno.test("crawlSite: linkOnly — không đoán /team, /doi-ngu, không đọc sitemap khi trang chủ không có link", async () => {
+  const pages: Record<string, () => Response> = {
+    "https://beta.vn/robots.txt": () => new Response("User-agent: *\nAllow: /", { headers: { "content-type": "text/plain" } }),
+    "https://beta.vn/": () =>
+      new Response('<a href="/lien-he">Liên hệ</a><a href="/gioi-thieu">Giới thiệu</a>', { headers: { "content-type": "text/html" } }),
+    "https://beta.vn/lien-he": () => new Response("<p>info@beta.vn</p>", { headers: { "content-type": "text/html" } }),
+    "https://beta.vn/gioi-thieu": () => new Response("<p>Giám đốc</p>", { headers: { "content-type": "text/html" } }),
+  };
+  const requested: string[] = [];
+  const fetchImpl = ((input: string | URL | Request) => {
+    const url = String(input);
+    requested.push(url.replace("https://beta.vn", ""));
+    const r = pages[url];
+    return Promise.resolve(r ? r() : new Response("nf", { status: 404, headers: { "content-type": "text/html" } }));
+  }) as typeof fetch;
+  const opts = {
+    delayMs: 0, maxPages: 4, maxAttempts: 10, timeoutMs: 1000, userAgent: "SyncLeadFinderBot/1.0",
+    deadline: Date.now() + 60_000, resolver: () => Promise.resolve(["93.184.216.34"]), fetchImpl,
+  };
+  const res = await crawlSite("beta.vn", "https://beta.vn/", ["contact", "about", "team"], { ...opts, linkOnly: ["team"] });
+  assertEquals(res.pages.map((p) => p.kind), ["home", "contact", "about"]);
+  assertEquals(requested, ["/robots.txt", "/", "/lien-he", "/gioi-thieu"]);
+
+  // Không có linkOnly: vẫn đoán như trước (sitemap + đường dẫn mặc định).
+  requested.length = 0;
+  await crawlSite("beta.vn", "https://beta.vn/", ["contact", "about", "team"], opts);
+  assert(requested.includes("/sitemap.xml") && requested.includes("/doi-ngu"));
+});
+
+Deno.test("mxStatus: DNS treo → 'unknown' sau timeout", async () => {
+  // deno-lint-ignore no-explicit-any
+  const d = Deno as any;
+  const original = d.resolveDns;
+  d.resolveDns = () => new Promise(() => {});
+  try {
+    const t = Date.now();
+    assertEquals(await mxStatus("cham.vn", 50), "unknown");
+    assert(Date.now() - t < 1000);
+  } finally {
+    d.resolveDns = original;
+  }
 });
