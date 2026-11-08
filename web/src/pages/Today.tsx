@@ -25,6 +25,8 @@ import {
 } from "../lib/pipeline";
 import { EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
 import { DealPanel } from "../components/DealPanel";
+import { DisqualifyDialog } from "../components/Disqualify";
+import { Ban } from "lucide-react";
 import { expiryText, fmtMoney, QUOTE_EXPIRY_WARN_DAYS, type Quote } from "../lib/quotes";
 
 type OpenQuote = Pick<Quote, "deal_id" | "number" | "valid_until" | "total" | "currency">;
@@ -67,6 +69,8 @@ export function TodayPage() {
   const openId = params.get("deal");
   const [queue, setQueue] = useState<string[] | null>(null);
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
+  const [disq, setDisq] = useState<{ id: string; name: string } | null>(null);
+  const onDisqualify = (r: DealRow) => setDisq({ id: r.company_id, name: r.company_name });
   const tab = (params.get("tab") as "qualify" | "touches" | null) ?? undefined;
 
   const load = useCallback(async () => {
@@ -249,7 +253,13 @@ export function TodayPage() {
             </button>
           </div>
 
-          <TaskList title="Việc hôm nay" empty="Không còn việc nào hôm nay. Làm tốt lắm!" tasks={todayTasks} onOpen={(id) => open(id, "touches")} />
+          <TaskList
+            title="Việc hôm nay"
+            empty="Không còn việc nào hôm nay. Làm tốt lắm!"
+            tasks={todayTasks}
+            onOpen={(id) => open(id, "touches")}
+            onDisqualify={onDisqualify}
+          />
           {hotWaiting.length > 0 && (
             <TaskList
               title="Khách đang chốt — chưa tới hạn"
@@ -275,9 +285,21 @@ export function TodayPage() {
               more={showAllNew ? 0 : waitingNew.length - 5}
               onMore={() => setShowAllNew(true)}
               onOpen={(id) => open(id, "touches")}
+              onDisqualify={onDisqualify}
             />
           )}
         </>
+      )}
+      {disq && (
+        <DisqualifyDialog
+          companies={[disq]}
+          onClose={() => setDisq(null)}
+          onDone={(msg) => {
+            setDisq(null);
+            setDoneMsg(`${msg} Danh sách này lưu ở trang Công ty (ô “Chỉ xem công ty đã đánh dấu không phù hợp”).`);
+            void load();
+          }}
+        />
       )}
       {openId && (
         <DealPanel
@@ -324,6 +346,7 @@ function TaskList({
   more = 0,
   onMore,
   onOpen,
+  onDisqualify,
 }: {
   title: string;
   hint?: string;
@@ -332,6 +355,8 @@ function TaskList({
   more?: number;
   onMore?: () => void;
   onOpen: (id: string) => void;
+  /** Nút “Không phù hợp” cho lead chưa liên hệ (loại ngay từ đầu, lưu ở trang Công ty). */
+  onDisqualify?: (row: DealRow) => void;
 }) {
   return (
     <div className="card">
@@ -344,7 +369,7 @@ function TaskList({
       ) : (
         <ul className="tasks">
           {tasks.map(({ row: r, title: what, date, action, extra }) => (
-            <li key={r.id}>
+            <li key={r.id} className={onDisqualify && r.touches === 0 ? "task-row" : undefined}>
               <button type="button" className="task" onClick={() => onOpen(r.id)}>
                 <span className={`tier tier-${r.tier ?? "none"}`}>{r.tier ?? "?"}</span>
                 <span className="task-main">
@@ -364,6 +389,18 @@ function TaskList({
                   <span className={dueState(date) === "overdue" || dueState(date) === "today" ? "btn btn-primary btn-sm" : "btn btn-sm"}>{action}</span>
                 </span>
               </button>
+              {onDisqualify && r.touches === 0 && (
+                <button
+                  type="button"
+                  className="task-x"
+                  title="Không phù hợp: ghi lý do, bỏ khỏi pipeline, lưu ở trang Công ty"
+                  aria-label={`${r.company_name}: không phù hợp`}
+                  onClick={() => onDisqualify(r)}
+                >
+                  <Ban aria-hidden="true" />
+                  <span>Không phù hợp</span>
+                </button>
+              )}
             </li>
           ))}
         </ul>

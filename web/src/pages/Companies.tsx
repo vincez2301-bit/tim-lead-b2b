@@ -31,6 +31,7 @@ interface Row {
   last_seen_at?: string;
   disqualified_at?: string | null;
   disqualify_reason?: DisqualifyReason | null;
+  disqualify_note?: string | null;
 }
 
 type Sort = "score" | "name" | "last_seen_at";
@@ -52,6 +53,8 @@ export function CompaniesPage() {
   // "" = ẩn công ty đã loại, "only" = chỉ xem công ty đã loại (để khôi phục).
   const [disqView, setDisqView] = useState<"" | "only">("");
   const [disqOpen, setDisqOpen] = useState(false);
+  /** Loại nhanh một công ty từ nút trên dòng. */
+  const [disqOne, setDisqOne] = useState<{ id: string; name: string } | null>(null);
   const [sort, setSort] = useState<Sort>("score");
   const [page, setPage] = useState(0);
 
@@ -121,7 +124,7 @@ export function CompaniesPage() {
         }
         let qb = supabase
           .from("company_list")
-          .select("id,name,domain,website_url,segment,city,status,score,is_dnc,last_seen_at,disqualified_at,disqualify_reason", { count: "exact" });
+          .select("id,name,domain,website_url,segment,city,status,score,is_dnc,last_seen_at,disqualified_at,disqualify_reason,disqualify_note", { count: "exact" });
         qb = disqView === "only" ? qb.not("disqualified_at", "is", null) : qb.is("disqualified_at", null);
         if (segment) qb = qb.eq("segment", segment);
         if (status) qb = qb.eq("status", status);
@@ -316,8 +319,17 @@ export function CompaniesPage() {
                   </td>
                   <td>
                     <Link to={`/companies/${r.id}`}>{r.name}</Link> {r.is_dnc && <Badge tone="red">DNC</Badge>}
-                    {r.disqualified_at && (
-                      <div className="small muted">Không phù hợp: {r.disqualify_reason ? DISQUALIFY_LABEL[r.disqualify_reason] : "—"}</div>
+                    {r.disqualified_at ? (
+                      <div className="small muted">
+                        Không phù hợp: {r.disqualify_reason ? DISQUALIFY_LABEL[r.disqualify_reason] : "—"}
+                        {r.disqualify_note ? ` — ${r.disqualify_note}` : ""}
+                      </div>
+                    ) : (
+                      <div>
+                        <button type="button" className="btn-link small" onClick={() => setDisqOne({ id: r.id, name: r.name })}>
+                          Không phù hợp…
+                        </button>
+                      </div>
                     )}
                   </td>
                   <td>
@@ -388,6 +400,22 @@ export function CompaniesPage() {
             <X aria-hidden="true" /> Bỏ chọn
           </button>
         </div>
+      )}
+      {disqOne && (
+        <DisqualifyDialog
+          companies={[disqOne]}
+          onClose={() => setDisqOne(null)}
+          onDone={(msg) => {
+            setDisqOne(null);
+            setNotice({ kind: "ok", text: `${msg} Xem lại ở ô “Chỉ xem công ty đã đánh dấu không phù hợp”.` });
+            setSelected((s) => {
+              const n = new Set(s);
+              n.delete(disqOne.id);
+              return n;
+            });
+            setReloadKey((k) => k + 1);
+          }}
+        />
       )}
       {disqOpen && (
         <DisqualifyDialog
