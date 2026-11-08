@@ -1,10 +1,11 @@
 name: Supabase keepalive
 
-# Gói Free của Supabase tạm dừng project sau 7 ngày không hoạt động: mỗi ngày gọi Edge Function keepalive một lần.
-# Lỗi liên tiếp = project có thể đã bị tạm dừng → vào dashboard Supabase bấm Restore.
+# Gói Free của Supabase tạm dừng project khi cả tuần ít hoạt động (pg_cron nội bộ không được tính).
+# 4 lần/ngày: gọi thẳng REST API (rpc keepalive, khoá anon công khai — web cũng dùng khoá này) và Edge Function keepalive.
+# Lỗi = project có thể đã bị tạm dừng → vào dashboard Supabase bấm Restore.
 on:
   schedule:
-    - cron: "23 1 * * *" # 08:23 giờ Việt Nam
+    - cron: "23 1,7,13,19 * * *" # 08:23, 14:23, 20:23, 02:23 giờ Việt Nam
   workflow_dispatch:
 
 permissions: {}
@@ -14,15 +15,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      URL: ${{ vars.SUPABASE_URL || 'https://gitckdkcjvmnzfiazkxk.supabase.co' }}/functions/v1/keepalive
+      BASE: ${{ vars.SUPABASE_URL || 'https://gitckdkcjvmnzfiazkxk.supabase.co' }}
+      # Khoá anon (publishable) là khoá công khai, đã có sẵn trong bản web; không phải bí mật.
+      ANON: ${{ vars.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpdGNrZGtjanZtbnpmaWF6a3hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM1OTY0OTksImV4cCI6MjEwOTE3MjQ5OX0.6K33gwLh1OBZbrBkPGq2n0zKxQMKjERYV3jMT50G6pk' }}
     steps:
-      - name: Gọi keepalive
+      - name: Gọi keepalive (REST API + Edge Function)
         run: |
-          for i in 1 2 3; do
-            code=$(curl -sS -m 30 -o out.json -w '%{http_code}' -X POST "$URL" -H 'Content-Type: application/json' -d '{}') || code=000
-            echo "Lần $i: HTTP $code $(cat out.json 2>/dev/null)"
-            [ "$code" = 200 ] && exit 0
-            sleep 30
-          done
-          echo "::error::Supabase không phản hồi. Project có thể đã bị tạm dừng: vào dashboard Supabase bấm Restore."
-          exit 1
+          call() { # $1 = tên, $2 = URL, còn lại = header
+            local name=$1 url=$2; shift 2
+            for i in 1 2 3; do
+              code=$(curl -sS -m 30 -o out.json -w '%{http_code}' -X POST "$url" -H 'Content-Type: application/json' "$@" -d '{}') || code=000
+              echo "$name lần $i: HTTP $code $(cat out.json 2>/dev/null)"
+              [ "$code" = 200 ] && return 0
+              sleep 30
+            done
+            return 1
+          }
+          ok=0
+          call REST "$BASE/rest/v1/rpc/keepalive" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" || ok=1
+          call Function "$BASE/functions/v1/keepalive" || ok=1
+          if [ $ok -ne 0 ]; then
+            echo "::error::Supabase không phản hồi. Project có thể đã bị tạm dừng: vào dashboard Supabase bấm Restore."
+            exit 1
+          fi

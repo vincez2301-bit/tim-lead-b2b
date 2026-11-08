@@ -1,4 +1,4 @@
--- Test: heartbeat chỉ service_role gọi được; gọi dồn dập không ghi thêm.
+-- Test: anon/service_role gọi được keepalive nhưng không đọc được bảng; gọi dồn dập không ghi thêm.
 \set QUIET on
 \o /dev/null
 begin;
@@ -15,7 +15,8 @@ end $$;
 grant execute on function pg_temp.denied(text) to anon, authenticated;
 
 set local role anon;
-select pg_temp.ok(pg_temp.denied('select public.keepalive()'), 'anon không gọi được keepalive');
+select pg_temp.ok(public.keepalive() is not null, 'anon gọi được keepalive (GitHub Actions qua REST)');
+select pg_temp.ok(pg_temp.denied('select * from public.heartbeat'), 'anon không đọc được heartbeat');
 reset role;
 set local role authenticated;
 select pg_temp.ok(pg_temp.denied('select * from public.heartbeat'), 'authenticated không đọc được heartbeat');
