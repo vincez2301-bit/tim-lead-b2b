@@ -28,6 +28,7 @@ Dùng chung cho cả nhóm (ai cũng xem và cập nhật được deal của nh
 - **Email nhắc việc mỗi sáng:** Edge Function `daily_digest` (Resend) được `pg_cron` gọi mỗi giờ; chỉ gửi khi đã bật, đúng giờ hẹn (giờ Việt Nam) và mỗi ngày một lần (`digest_log`). Bật ở Cài đặt → Email nhắc việc mỗi sáng.
 - **Không bị Supabase tạm dừng (gói Free):** GitHub Actions `keepalive.yml` gọi Edge Function `keepalive` mỗi ngày (ghi một dòng `heartbeat`). Workflow báo lỗi = project có thể đã bị tạm dừng → vào dashboard Supabase bấm Restore.
 - Kiến trúc, chỗ trùng lặp và cách giảm nặng: [docs/kien-truc.md](docs/kien-truc.md).
+- Tính năng lớn: spec ngắn bằng tiếng Việt, duyệt trước khi code — [specs/README.md](specs/README.md).
 - File lead có dữ liệu cá nhân: **không commit vào repo** (repo công khai).
 
 ## Cấu trúc

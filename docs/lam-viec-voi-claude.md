@@ -7,6 +7,7 @@
 - **Hội thoại ngắn:** mỗi lượt gửi lại toàn bộ hội thoại, kể cả ảnh đã xem. Hội thoại dài thì `/compact`. Mỗi phiên một việc hoặc một vai; việc mới thì mở phiên mới. Cần xem nhiều hình thì ghép thành một tấm.
 - **Ghi luật vào tệp:** luật cần nhớ lâu ghi vào `CLAUDE.md` hoặc `docs/`. `CLAUDE.md` được nạp ở mọi lượt nên giữ thật ngắn; chi tiết để tệp riêng và dẫn đường tới đó.
 - **Trả lời ngắn:** không nhắc lại điều đã chốt, không liệt kê phương án sẽ không làm.
+- **Spec trước cho việc lớn:** tính năng lớn viết spec ngắn ở `specs/` và duyệt trước khi code (`specs/README.md`), tránh làm lại khi hiểu sai ý.
 - **Hỏi một lần:** gom mọi câu hỏi duyệt vào một lần. Chỉ hỏi giữa chừng khi việc tốn tiền hoặc đổi điều đã chốt.
 - **Tác vụ tự động:** prompt cố định, ngắn, báo cáo tối đa khoảng 15 dòng.
 

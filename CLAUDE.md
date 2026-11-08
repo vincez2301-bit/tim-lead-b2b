@@ -14,6 +14,12 @@ Tổng quan, cấu trúc, triển khai: `README.md`. Frontend: `web/README.md`. 
 - Cloud: supabase.com bị chặn mạng, tra tài liệu bằng WebSearch.
 - `web/src/lib/api-types.ts` là bản sao `supabase/functions/_shared/types.ts`: sửa cả hai.
 
+## Tính năng lớn: spec trước (`specs/README.md`)
+- Cần spec khi thêm bảng/migration, Edge Function hoặc trang mới; đổi luồng pipeline/chốt sale/quyền; tốn thêm tiền/hạn mức; hoặc làm quá ~1 giờ.
+- Viết `specs/NNN-ten.md` từ `specs/_mau.md` (tiếng Việt, ngắn), gửi người dùng; chỉ code khi đã “duyệt”.
+- Làm xong: đánh dấu tiêu chí nghiệm thu, ghi Đã xong + commit. Đổi ý thì sửa spec trước.
+- Spec không chứa dữ liệu khách thật (repo công khai).
+
 ## Cách làm việc
 - Trả lời ngắn, tiếng Việt; không nhắc lại điều đã chốt, không liệt kê phương án không làm.
 - grep trước, chỉ đọc đoạn cần; sửa xong không đọc lại.
