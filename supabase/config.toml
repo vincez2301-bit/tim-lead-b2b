@@ -82,3 +82,8 @@ verify_jwt = true
 # đúng giờ hẹn và mỗi ngày một lần; “Gửi thử” thì bắt buộc JWT của admin (kiểm tra trong code).
 [functions.daily_digest]
 verify_jwt = false
+
+# Giữ project gói Free không bị tạm dừng: GitHub Actions (keepalive.yml) gọi mỗi ngày, không kèm JWT.
+# Chỉ ghi một dòng heartbeat (tối đa mỗi phút một lần), không đọc hay trả dữ liệu nào.
+[functions.keepalive]
+verify_jwt = false

@@ -1,0 +1,28 @@
+name: Supabase keepalive
+
+# Gói Free của Supabase tạm dừng project sau 7 ngày không hoạt động: mỗi ngày gọi Edge Function keepalive một lần.
+# Lỗi liên tiếp = project có thể đã bị tạm dừng → vào dashboard Supabase bấm Restore.
+on:
+  schedule:
+    - cron: "23 1 * * *" # 08:23 giờ Việt Nam
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      URL: ${{ vars.SUPABASE_URL || 'https://gitckdkcjvmnzfiazkxk.supabase.co' }}/functions/v1/keepalive
+    steps:
+      - name: Gọi keepalive
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -sS -m 30 -o out.json -w '%{http_code}' -X POST "$URL" -H 'Content-Type: application/json' -d '{}') || code=000
+            echo "Lần $i: HTTP $code $(cat out.json 2>/dev/null)"
+            [ "$code" = 200 ] && exit 0
+            sleep 30
+          done
+          echo "::error::Supabase không phản hồi. Project có thể đã bị tạm dừng: vào dashboard Supabase bấm Restore."
+          exit 1
