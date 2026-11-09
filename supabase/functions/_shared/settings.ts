@@ -64,10 +64,22 @@ export interface AppSettings {
   aggregator_blocklist: string[];
   discover_exclude_words: string[];
   signal_rules: Record<string, { type?: string; min?: number; max?: number }>;
+  /** Vai trò cần tìm theo nhóm khách (settings.contact_roles). */
+  contact_roles: Record<string, string[]>;
 }
 
 function num(v: unknown, def: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : def;
+}
+
+/** { nhóm: [chuỗi] } — bỏ giá trị không phải chuỗi / rỗng. */
+function stringLists(v: unknown): Record<string, string[]> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [k, list] of Object.entries(v as Record<string, unknown>)) {
+    if (Array.isArray(list)) out[k] = list.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim());
+  }
+  return out;
 }
 
 export async function loadSettings(db: Db): Promise<AppSettings> {
@@ -100,6 +112,7 @@ export async function loadSettings(db: Db): Promise<AppSettings> {
       ? (map.get("discover_exclude_words") as unknown[]).filter((x): x is string => typeof x === "string")
       : [],
     signal_rules: (map.get("signal_rules") ?? {}) as AppSettings["signal_rules"],
+    contact_roles: stringLists(map.get("contact_roles")),
   };
 }
 

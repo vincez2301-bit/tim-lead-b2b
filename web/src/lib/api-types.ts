@@ -103,6 +103,21 @@ export interface FindWebsiteResponse {
   remaining_ids: string[];
   stopped_reason: "quota" | null;
 }
+export interface FindPeopleResponse {
+  run_id: string;
+  checked: number; // công ty đã tìm lần này
+  skipped_recent: number; // đã tìm trong 30 ngày qua
+  skipped_not_in_pipeline: number;
+  people: number; // người tìm qua LinkedIn
+  emails: number; // email thật (không tính email đoán)
+  guessed: number; // email đoán theo mẫu của công ty
+  with_person_email_before: number; // công ty có người kèm email trước / sau lần tìm
+  with_person_email_after: number;
+  units_used: number;
+  errors: string[];
+  remaining_ids: string[];
+  stopped_reason: "quota" | null;
+}
 export interface EnrichContactResponse {
   run_id: string;
   processed: number;
@@ -123,6 +138,7 @@ export interface EnrichYoutubeResponse {
   channels: number;
   units_used: number;
   skipped_no_channel: number;
+  emails?: number; // email hợp tác lấy từ mô tả kênh
   remaining_ids: string[];
   stopped_reason: "quota" | "time" | null;
 }

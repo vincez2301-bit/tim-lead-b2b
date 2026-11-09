@@ -10,7 +10,7 @@ export interface Person {
 }
 
 // Chức danh người quyết định (khớp không phân biệt hoa thường). Thứ tự = độ ưu tiên.
-const TITLE_RE = new RegExp(
+export const TITLE_RE = new RegExp(
   [
     "tổng giám đốc", "phó tổng giám đốc", "giám đốc điều hành", "giám đốc sáng tạo", "giám đốc sản xuất",
     "giám đốc marketing", "giám đốc nội dung", "giám đốc", "nhà sáng lập", "đồng sáng lập", "người sáng lập",
@@ -24,12 +24,12 @@ const TITLE_RE = new RegExp(
   "i",
 );
 
-const VN_SURNAMES = new Set([
+export const VN_SURNAMES = new Set([
   "nguyễn", "trần", "lê", "phạm", "hoàng", "huỳnh", "phan", "vũ", "võ", "đặng", "bùi", "đỗ", "hồ", "ngô",
   "dương", "lý", "đinh", "đoàn", "trương", "lâm", "mai", "trịnh", "đào", "cao", "lưu", "tạ", "tô", "hà",
   "châu", "quách", "thái", "lương", "vương", "từ", "kiều", "la", "triệu", "chu", "văn", "tăng", "khúc",
 ]);
-const NAME_STOPWORDS = new Set([
+export const NAME_STOPWORDS = new Set([
   "công", "ty", "tnhh", "cổ", "phần", "giám", "đốc", "tổng", "marketing", "content", "head", "our", "team",
   "về", "chúng", "tôi", "liên", "hệ", "đội", "ngũ", "ban", "lãnh", "đạo", "founder", "ceo", "director",
   "creative", "producer", "studio", "production", "media", "group", "việt", "nam", "vietnam", "the", "and",
@@ -40,7 +40,7 @@ const NAME_STOPWORDS = new Set([
 // 2–5 từ bắt đầu bằng chữ hoa (có dấu tiếng Việt), kể cả tên VIẾT HOA TOÀN BỘ.
 const NAME_RE = /\p{Lu}[\p{L}\p{M}]*(?:\s+\p{Lu}[\p{L}\p{M}]*){1,4}/gu;
 
-function titleCase(s: string): string {
+export function titleCase(s: string): string {
   return s.toLowerCase().replace(/(^|\s)(\p{L})/gu, (_m, sp: string, c: string) => sp + c.toUpperCase());
 }
 
@@ -53,7 +53,7 @@ function nameConfidence(name: string): number {
   return 0;
 }
 
-function findName(s: string): { name: string; conf: number } | null {
+export function findName(s: string): { name: string; conf: number } | null {
   let best: { name: string; conf: number } | null = null;
   for (const m of s.matchAll(NAME_RE)) {
     const name = titleCase(m[0].trim());

@@ -69,6 +69,9 @@ verify_jwt = true
 [functions.enrich_contact]
 verify_jwt = true
 
+[functions.find_people]
+verify_jwt = true
+
 [functions.score]
 verify_jwt = true
 

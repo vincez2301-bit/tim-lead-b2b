@@ -68,6 +68,11 @@ const KEY_INFO: Record<string, { label: string; help: string; shape: "array" | "
     help: "Từ khoá gợi ý theo nhóm: broadcaster, mcn, agency, film, brand (tối đa 20 mỗi nhóm, không cần ghi tên thành phố). Người dùng sửa được trước mỗi lần chạy.",
     shape: "object",
   },
+  contact_roles: {
+    label: "Vai trò cần tìm theo nhóm khách",
+    help: 'Chức danh “Tìm người phụ trách” tìm trên LinkedIn (qua Google) cho từng nhóm: broadcaster, mcn, agency, film, brand. Tối đa 6 vai trò đầu được đưa vào câu tìm, vd. {"agency":["Producer","Creative Director"]}.',
+    shape: "object",
+  },
   aggregator_blocklist: {
     label: "Danh sách aggregator bị chặn",
     help: "Domain thư mục, báo chí, sàn việc làm, mạng xã hội… bị loại khi Discover (khớp cả subdomain).",

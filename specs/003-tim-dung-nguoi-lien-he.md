@@ -1,6 +1,6 @@
 # 003 — Tìm đúng người phụ trách và email cá nhân, không chỉ email chung
 
-- **Trạng thái:** Nháp <!-- Nháp → Đã duyệt (ngày) → Đã xong (commit) -->
+- **Trạng thái:** Đã xong (2026-11-09) — còn bước bạn chạy thử 20 lead <!-- Nháp → Đã duyệt (ngày) → Đã xong (commit) -->
 - **Người duyệt:** Việt
 
 ## Vấn đề / mục tiêu
@@ -30,13 +30,13 @@ Mục tiêu: với mỗi lead, tìm **người phụ trách đúng vai trò** (p
 | Nhãn hàng | Marketing Manager, Brand Manager, Head of Content, Digital Marketing Manager |
 
 ## Tiêu chí nghiệm thu
-- [ ] Người tìm qua Google/LinkedIn có tên, chức danh, link nguồn; chỉ nhận khi kết quả ghi đúng tên công ty.
-- [ ] Email đoán chỉ xuất hiện khi có email thật của công ty làm bằng chứng, có ghi mẫu và nguồn.
-- [ ] Danh sách liên hệ xếp đúng thứ tự: người đúng vai trò có email → email phòng ban → email chung; email tuyển dụng / CSKH bị ẩn.
-- [ ] Nút Mở email chọn sẵn email tốt nhất và chào đúng tên người.
-- [ ] Hết hạn mức Google trong ngày thì dừng, báo rõ, hôm sau chạy tiếp; không lặp lại công ty đã tìm trong 30 ngày.
-- [ ] Thử trên 20 lead đang có: báo số lead có người đúng vai trò + email cá nhân trước/sau (chỉ báo con số, không ghi tên khách vào repo).
-- [ ] Trên điện thoại vẫn dùng được.
+- [x] Người tìm qua Google/LinkedIn có tên, chức danh, link nguồn; chỉ nhận khi kết quả ghi đúng tên công ty.
+- [x] Email đoán chỉ xuất hiện khi có email thật của công ty làm bằng chứng, có ghi mẫu và nguồn.
+- [x] Danh sách liên hệ xếp đúng thứ tự: người đúng vai trò có email → email phòng ban → email chung; email tuyển dụng / CSKH bị ẩn.
+- [x] Nút Mở email chọn sẵn email tốt nhất và chào đúng tên người.
+- [x] Hết hạn mức Google trong ngày thì dừng, báo rõ, hôm sau chạy tiếp; không lặp lại công ty đã tìm trong 30 ngày.
+- [ ] Thử trên 20 lead đang có: kết quả chạy báo số lead có người đúng vai trò + email cá nhân trước/sau (chỉ báo con số, không ghi tên khách vào repo).
+- [x] Trên điện thoại vẫn dùng được.
 
 ## Không làm (lần này)
 - Đăng nhập hay đọc trực tiếp LinkedIn, Facebook.
@@ -48,12 +48,18 @@ Mục tiêu: với mỗi lead, tìm **người phụ trách đúng vai trò** (p
 - **Hạn mức / tiền:** thêm tối đa **2 lượt Google (Serper) mỗi công ty**, chỉ chạy cho lead trong pipeline. Hạn mức ngày hiện tại 200 lượt; giá Serper khoảng 1 USD / 1.000 lượt.
 - **Triển khai:** đẩy `main` = chạy thật; không cần bật gì thêm.
 
-## Câu hỏi còn mở
-1. Có chạy một lượt cho **toàn bộ lead đang có** trong pipeline không (tốn ~2 lượt × số công ty; mình báo con số trước khi chạy)? Hay chỉ lead mới + bấm tay?
-2. Danh sách vai trò theo nhóm khách ở trên đúng chưa — thêm / bớt vai trò nào?
-3. Có muốn thêm dịch vụ tìm & xác minh email trả phí (vd. Hunter.io, khoảng 34–49 USD/tháng cho ~500 lượt) để email chắc chắn hơn không? Mặc định: không dùng.
+## Câu hỏi còn mở (đã chốt khi duyệt, theo mặc định đề xuất)
+1. Không tự chạy hàng loạt cho lead cũ: lead mới tự chạy sau bước Đọc website; lead cũ bấm tay (một công ty trong khung khách, hoặc chọn nhiều ở trang Công ty — app báo số lượt Google trước khi chạy).
+2. Vai trò theo nhóm khách như bảng trên (sửa được ở Cài đặt → `contact_roles`).
+3. Không dùng dịch vụ trả phí.
 
-## Kế hoạch (Claude điền sau khi duyệt)
-- **Tệp sửa:** …
-- **Thứ tự làm:** …
-- **Kiểm tra:** test SQL / deno / build web / thử giao diện.
+## Kế hoạch
+- **Tệp sửa:**
+  - Migration `20261109000100_find_people.sql`: `runs.step` thêm `find_people`; `contacts.source` thêm `linkedin` / `web` / `youtube`; cột `contacts.note` (ghi mẫu email đoán); `companies.people_searched_at`; `settings.contact_roles`.
+  - `_shared/people_search.ts` (hàm thuần): khoá so khớp tên công ty, câu truy vấn, đọc kết quả LinkedIn / email trên Google, ghép người–email, đoán theo mẫu có bằng chứng.
+  - Edge Function `find_people` (2 lượt Serper/công ty, chỉ công ty đang trong pipeline, bỏ qua nếu đã tìm trong 30 ngày, báo trước/sau).
+  - `youtube.ts` + `enrich_youtube`: email trong mô tả kênh → liên hệ nguồn YouTube.
+  - `contacts.ts`: tín hiệu DECISION_MAKER_FOUND đếm cả người tìm qua LinkedIn.
+  - Web: `lib/contacts.ts` (xếp hạng, ẩn email tuyển dụng / CSKH), khung khách (danh sách xếp hạng, nguồn, nút Tìm người phụ trách, người nhận mặc định), trang công ty, trang Công ty (chạy cho nhiều công ty), PipelineRunner (bước mới sau Đọc website), Cài đặt, kiểu dữ liệu.
+- **Thứ tự làm:** migration + test SQL → hàm thuần + deno test → Edge Function → YouTube → web → tài liệu.
+- **Kiểm tra:** `deno task lint/check/test`, `scripts/test-db.sh`, `npm run build`; sau khi lên main bạn chạy thử 20 lead và đọc con số trước/sau.

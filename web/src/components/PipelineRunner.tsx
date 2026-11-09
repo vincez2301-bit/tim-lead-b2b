@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { runBatched, sumField, type BatchFn, type BatchProgress } from "../lib/api";
-import type { EnrichContactResponse, EnrichYoutubeResponse, FindWebsiteResponse, ProfileResponse } from "../lib/api-types";
+import type {
+  EnrichContactResponse,
+  EnrichYoutubeResponse,
+  FindPeopleResponse,
+  FindWebsiteResponse,
+  ProfileResponse,
+} from "../lib/api-types";
 import { STEP_LABEL } from "../lib/format";
 import { Notice, Progress } from "./ui";
 
@@ -13,7 +19,8 @@ interface StepView {
 }
 
 // Bước đọc website tìm luôn người liên hệ, nên không chạy enrich_contact (đọc lại cùng các trang) nữa.
-const ALL_STEPS: BatchFn[] = ["profile", "enrich_youtube"];
+// Tìm người phụ trách (LinkedIn + email trên Google) chạy sau cùng, chỉ cho công ty đang trong pipeline.
+const ALL_STEPS: BatchFn[] = ["profile", "enrich_youtube", "find_people"];
 
 function summarize(fn: BatchFn, responses: unknown[]): string {
   if (fn === "find_website") {
@@ -28,7 +35,20 @@ function summarize(fn: BatchFn, responses: unknown[]): string {
   }
   if (fn === "enrich_youtube") {
     const r = responses as EnrichYoutubeResponse[];
-    return `Đã xử lý ${sumField(r, "processed")}, ${sumField(r, "channels")} kênh, ${sumField(r, "units_used")} đơn vị quota, ${sumField(r, "skipped_no_channel")} công ty không có kênh.`;
+    const emails = sumField(r, "emails");
+    return `Đã xử lý ${sumField(r, "processed")}, ${sumField(r, "channels")} kênh${emails ? `, ${emails} email hợp tác trên kênh` : ""}, ${sumField(r, "units_used")} đơn vị quota, ${sumField(r, "skipped_no_channel")} công ty không có kênh.`;
+  }
+  if (fn === "find_people") {
+    const r = responses as FindPeopleResponse[];
+    const checked = sumField(r, "checked");
+    const skipped = sumField(r, "skipped_not_in_pipeline");
+    const recent = sumField(r, "skipped_recent");
+    const extra = [
+      skipped ? `bỏ qua ${skipped} công ty chưa vào pipeline` : "",
+      recent ? `${recent} công ty đã tìm trong 30 ngày qua` : "",
+    ].filter(Boolean).join(", ");
+    if (!checked) return `Không có công ty nào cần tìm${extra ? ` (${extra})` : ""}.`;
+    return `Đã tìm ${checked} công ty: ${sumField(r, "people")} người qua LinkedIn, ${sumField(r, "emails")} email thật, ${sumField(r, "guessed")} email đoán theo mẫu. Công ty có người kèm email: ${sumField(r, "with_person_email_before")} → ${sumField(r, "with_person_email_after")}. Dùng ${sumField(r, "units_used")} lượt Google${extra ? `; ${extra}` : ""}.`;
   }
   const r = responses as EnrichContactResponse[];
   return `Đã xử lý ${sumField(r, "processed")}, ${sumField(r, "contacts")} liên hệ, ${sumField(r, "decision_makers")} người quyết định.`;
@@ -116,8 +136,8 @@ export function PipelineRunner({
         update(fn, { state: "stopped", summary });
         setNotes((n) => [
           ...n,
-          fn === "find_website"
-            ? "Google (Serper): đã hết hạn mức lượt hôm nay. Chạy lại phân tích cho danh sách này vào ngày mai — công ty đã có website không tốn lượt."
+          fn === "find_website" || fn === "find_people"
+            ? `Google (Serper): đã hết hạn mức lượt hôm nay. Chạy lại cho danh sách này vào ngày mai — ${fn === "find_people" ? "công ty đã tìm xong không tốn lượt" : "công ty đã có website không tốn lượt"}.`
             : "YouTube: đã hết quota hôm nay. Run được lưu ở trạng thái 'Dừng giữa chừng' — vào Nhật ký để bấm Tiếp tục sau khi quota đặt lại.",
         ]);
         continue; // các bước sau không tốn quota YouTube nên vẫn chạy tiếp
@@ -160,7 +180,11 @@ export function PipelineRunner({
       </div>
       <p className="muted small">
         {steps.includes("find_website") ? "Tìm website trên Google (công ty chưa có website, 1–2 lượt Google mỗi công ty) → " : ""}
-        Đọc website (tìm luôn email, người phụ trách) → kênh YouTube → chấm điểm. Mỗi lượt {batchSize} công ty; có thể để chạy, xong sẽ báo.
+        {steps.includes("profile") ? "Đọc website (tìm luôn email, người phụ trách) → kênh YouTube → " : ""}
+        {steps.includes("find_people")
+          ? `tìm người phụ trách trên LinkedIn và email trên Google (tối đa ${companyIds.length * 2} lượt Google; chỉ công ty đang trong pipeline, bỏ qua công ty đã tìm trong 30 ngày) → `
+          : ""}
+        chấm điểm. Mỗi lượt {batchSize} công ty; có thể để chạy, xong sẽ báo.
       </p>
       <ul className="steps">
         {steps.map((fn) => {

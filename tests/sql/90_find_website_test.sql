@@ -26,7 +26,7 @@ insert into public.runs (owner_id, step) values ('00000000-0000-0000-0000-000000
 insert into public.contacts (company_id, phone, source) values ('90000000-0000-0000-0000-000000000001', '028 3838 3838', 'google');
 do $$ begin
   begin
-    insert into public.contacts (company_id, phone, source) values ('90000000-0000-0000-0000-000000000001', '1', 'web');
+    insert into public.contacts (company_id, phone, source) values ('90000000-0000-0000-0000-000000000001', '1', 'facebook');
     raise exception 'FAIL: nhận nguồn liên hệ lạ';
   exception when check_violation then null;
   end;

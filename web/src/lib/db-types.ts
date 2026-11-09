@@ -4,7 +4,7 @@ import type { CompanyStatus, EmailLabel, RunStatus, Segment } from "./api-types"
 export type SignalStatus = "proposed" | "confirmed" | "rejected";
 export type DncReason = "existing_customer" | "competitor" | "opted_out" | "other";
 export type Role = "admin" | "user";
-export type Step = "discover" | "find_website" | "profile" | "enrich_youtube" | "enrich_contact" | "score" | "export";
+export type Step = "discover" | "find_website" | "profile" | "enrich_youtube" | "enrich_contact" | "find_people" | "score" | "export";
 
 export interface Profile {
   user_id: string;
@@ -53,6 +53,9 @@ export interface Company {
   is_dnc?: boolean;
 }
 
+/** auto = đọc website, google = Google Maps / Knowledge Graph, web = email thấy trên Internet. */
+export type ContactSource = "auto" | "manual" | "google" | "linkedin" | "web" | "youtube";
+
 export interface Contact {
   id: string;
   company_id: string;
@@ -62,8 +65,9 @@ export interface Contact {
   email_label: EmailLabel | null;
   phone: string | null;
   confidence: number | null;
-  source: "auto" | "manual";
+  source: ContactSource;
   evidence_url: string | null;
+  note: string | null;
   created_at: string;
 }
 

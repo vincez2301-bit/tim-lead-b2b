@@ -1,6 +1,8 @@
 // YouTube Data API v3 — chỉ dùng channels.list và playlistItems.list (~1 đơn vị/lần),
 // KHÔNG dùng search.list (100 đơn vị) trong luồng chuẩn (mục 3, mục 4.3).
 
+import { isPlausibleEmail } from "./extract.ts";
+
 export class QuotaExceededError extends Error {
   constructor() {
     super("quotaExceeded");
@@ -24,6 +26,20 @@ export interface ChannelStats {
   uploadsPlaylistId: string | null;
   videos30d: number;
   videos90d: number;
+  /** Email ghi trong phần mô tả kênh (thường là email hợp tác / quảng cáo). */
+  emails: string[];
+}
+
+const EMAIL_IN_TEXT = /[a-z0-9][a-z0-9._%+-]{0,63}@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}/gi;
+
+/** Email trong mô tả kênh (tối đa 3, bỏ trùng). */
+export function emailsInDescription(text: string | null | undefined): string[] {
+  const out = new Set<string>();
+  for (const m of (text ?? "").matchAll(EMAIL_IN_TEXT)) {
+    const e = m[0].toLowerCase().replace(/[.,;:]+$/, "");
+    if (isPlausibleEmail(e)) out.add(e);
+  }
+  return [...out].slice(0, 3);
 }
 
 export function parseChannelUrl(url: string): ChannelRef | null {
@@ -134,6 +150,7 @@ export class YoutubeClient {
       uploadsPlaylistId: uploads,
       videos30d: countSince(published, 30, now),
       videos90d: countSince(published, 90, now),
+      emails: emailsInDescription(snippet.description),
     };
   }
 }

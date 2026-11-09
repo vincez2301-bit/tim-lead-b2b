@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { supabase } from "../lib/supabase";
-import { callFn } from "../lib/api";
+import { callFn, type BatchFn } from "../lib/api";
 import type { CohortQueryRequest, CohortQueryResponse, CompanyStatus, Segment } from "../lib/api-types";
 import type { SignalCode } from "../lib/db-types";
 import { SEGMENTS, SEGMENT_LABEL, STATUSES, STATUS_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { useDebounced } from "../lib/hooks";
 import { allCityNames, getBatchSize, rememberFilter, rememberedFilter, useSettings } from "../lib/settings";
-import { Kanban, Play, X } from "lucide-react";
+import { Kanban, Play, UserSearch, X } from "lucide-react";
 import { Badge, EmptyState, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
 import { SafeLink, shortUrl } from "../components/SafeLink";
 import { PipelineRunner } from "../components/PipelineRunner";
@@ -64,6 +64,8 @@ export function CompaniesPage() {
   const [signals, setSignals] = useState<SignalCode[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showRunner, setShowRunner] = useState(false);
+  /** undefined = phân tích đầy đủ; ["find_people"] = chỉ tìm người phụ trách. */
+  const [runnerSteps, setRunnerSteps] = useState<BatchFn[] | undefined>(undefined);
   const [reloadKey, setReloadKey] = useState(0);
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
@@ -274,8 +276,9 @@ export function CompaniesPage() {
       {showRunner && selected.size > 0 && (
         <div id="runner">
         <PipelineRunner
-          key={[...selected].join(",")}
+          key={`${(runnerSteps ?? []).join("+")}:${[...selected].join(",")}`}
           companyIds={[...selected]}
+          steps={runnerSteps}
           batchSize={getBatchSize(settings)}
           findWebsite={(rows ?? []).some((r) => selected.has(r.id) && !r.domain)}
           onFinished={() => setReloadKey((k) => k + 1)}
@@ -364,12 +367,26 @@ export function CompaniesPage() {
             type="button"
             className="btn-primary"
             onClick={() => {
+              setRunnerSteps(undefined);
               setShowRunner(true);
               requestAnimationFrame(() => document.getElementById("runner")?.scrollIntoView({ behavior: "smooth" }));
             }}
           >
             <Play aria-hidden="true" /> Phân tích website
           </button>
+          {disqView !== "only" && (
+            <button
+              type="button"
+              title="LinkedIn công khai + email của công ty trên Google; tối đa 2 lượt Google mỗi công ty đang trong pipeline"
+              onClick={() => {
+                setRunnerSteps(["find_people"]);
+                setShowRunner(true);
+                requestAnimationFrame(() => document.getElementById("runner")?.scrollIntoView({ behavior: "smooth" }));
+              }}
+            >
+              <UserSearch aria-hidden="true" /> Tìm người phụ trách
+            </button>
+          )}
           {disqView === "only" ? (
             <button
               type="button"

@@ -4,6 +4,7 @@ import { Copy, FileText, Plus, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useSettings } from "../lib/settings";
 import { errMsg } from "../lib/format";
+import { canEmail } from "../lib/contacts";
 import {
   QUOTE_STEP,
   SIGN_STEP,
@@ -43,7 +44,9 @@ import { Badge, Notice } from "./ui";
 interface ContactLite {
   id: string;
   full_name: string | null;
+  job_title?: string | null;
   email: string | null;
+  email_label?: string | null;
 }
 
 export type LogFn = (a: {
@@ -322,7 +325,7 @@ function QuoteForm({
   const [discount, setDiscount] = useState("0");
   const [validUntil, setValidUntil] = useState(addDays(todayIso(), book.valid_days));
   const [terms, setTerms] = useState(book.terms);
-  const [contactId, setContactId] = useState(contacts[0]?.id ?? "");
+  const [contactId, setContactId] = useState((contacts.find(canEmail) ?? contacts[0])?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -506,7 +509,7 @@ function SendQuote({
   onSent: (contactId: string | null) => Promise<void>;
   onClose: () => void;
 }) {
-  const withEmail = contacts.filter((c) => c.email);
+  const withEmail = contacts.filter(canEmail);
   const [contactId, setContactId] = useState((withEmail[0] ?? contacts[0])?.id ?? "");
   const contact = contacts.find((c) => c.id === contactId) ?? null;
   const draft = useMemo(

@@ -34,6 +34,7 @@ export const STEP_LABEL: Record<Step, string> = {
   profile: "Đọc website",
   enrich_youtube: "YouTube",
   enrich_contact: "Người liên hệ",
+  find_people: "Tìm người phụ trách",
   score: "Chấm điểm",
   export: "Export",
 };

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { supabase } from "../lib/supabase";
 import { callFn, runBatched, type BatchFn } from "../lib/api";
-import type { EnrichContactResponse, ProfileResponse, ScoreResponse } from "../lib/api-types";
+import type { EnrichContactResponse, FindPeopleResponse, ProfileResponse, ScoreResponse } from "../lib/api-types";
+import { SOURCE_LABEL, getContactRoles, rankContacts } from "../lib/contacts";
+import { useSettings } from "../lib/settings";
 import type { Company, Contact, Observation, SignalCode } from "../lib/db-types";
 import { HINT_SIGNALS, SEGMENT_LABEL, STEP_LABEL, errMsg, fmtDate, fmtNum } from "../lib/format";
 import { Badge, EmailLabelBadge, Notice, PageHeader, ScorePill, Spinner, StatusBadge, TableWrap } from "../components/ui";
@@ -15,6 +17,7 @@ export function CompanyDetailPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const { settings } = useSettings();
   const [signals, setSignals] = useState<Map<string, SignalCode>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +73,11 @@ export function CompanyDetailPage() {
     }
     return ids;
   }, [observations]);
+  // Cùng thứ tự với khung khách: người đúng vai trò có email lên đầu, email tuyển dụng / CSKH xuống cuối (mờ).
+  const { sortedContacts, hiddenIds } = useMemo(() => {
+    const r = rankContacts(contacts, company?.segment ?? null, getContactRoles(settings));
+    return { sortedContacts: [...r.shown, ...r.hidden], hiddenIds: new Set(r.hidden.map((c) => c.id)) };
+  }, [contacts, company?.segment, settings]);
   const shownObs = showHistory ? observations : observations.filter((o) => latestIds.has(o.id));
 
   async function act(a: Action) {
@@ -79,6 +87,19 @@ export function CompanyDetailPage() {
       if (a === "score") {
         const r = await callFn<ScoreResponse>("score", { company_ids: [id] });
         setActionMsg({ kind: "ok", text: `Đã tính lại điểm (${r.updated}).` });
+      } else if (a === "find_people") {
+        const r = await callFn<FindPeopleResponse>("find_people", { company_ids: [id], force: true });
+        setActionMsg(
+          r.stopped_reason === "quota"
+            ? { kind: "warn", text: "Đã hết lượt Google hôm nay — thử lại ngày mai." }
+            : r.skipped_not_in_pipeline
+              ? { kind: "warn", text: "Chỉ tìm cho công ty đang trong pipeline — đưa công ty vào Pipeline trước." }
+              : {
+                  kind: "ok",
+                  text: `Tìm người phụ trách: ${r.people} người qua LinkedIn, ${r.emails} email thật, ${r.guessed} email đoán theo mẫu (dùng ${r.units_used} lượt Google).`,
+                },
+        );
+        await load();
       } else {
         const r = await runBatched<EnrichContactResponse & ProfileResponse>(a, [id], 1);
         const found = r.responses[0];
@@ -179,7 +200,7 @@ export function CompanyDetailPage() {
           </dd>
         </dl>
         <div className="row wrap">
-          {(["profile", "enrich_youtube", "enrich_contact", "score"] as Action[]).map((a) => (
+          {(["profile", "enrich_youtube", "enrich_contact", "find_people", "score"] as Action[]).map((a) => (
             <button key={a} type="button" disabled={busy !== null || !!company.is_dnc} onClick={() => void act(a)}>
               {busy === a ? "Đang chạy…" : a === "score" ? "Tính lại điểm" : STEP_LABEL[a]}
             </button>
@@ -189,6 +210,8 @@ export function CompanyDetailPage() {
           <p className="small muted">
             {busy === "enrich_youtube"
               ? "Đang tìm kênh YouTube…"
+              : busy === "find_people"
+                ? "Đang tìm trên LinkedIn công khai và email của công ty trên Google (2 lượt Google)…"
               : "Đang đọc trang chủ, Liên hệ, Giới thiệu của website (thường 5–10 giây; app nghỉ giữa các trang để không làm phiền website của khách)…"}
           </p>
         )}
@@ -265,11 +288,12 @@ export function CompanyDetailPage() {
                   <th>SĐT</th>
                   <th className="num">Tin cậy</th>
                   <th>Nguồn</th>
+                  <th>Ghi chú</th>
                 </tr>
               </thead>
               <tbody>
-                {contacts.map((c) => (
-                  <tr key={c.id}>
+                {sortedContacts.map((c) => (
+                  <tr key={c.id} className={hiddenIds.has(c.id) ? "muted" : undefined}>
                     <td>{c.full_name ?? "—"}</td>
                     <td>{c.job_title ?? "—"}</td>
                     <td>{c.email ?? "—"}</td>
@@ -279,8 +303,15 @@ export function CompanyDetailPage() {
                     <td>{c.phone ?? "—"}</td>
                     <td className="num">{fmtNum(c.confidence, 2)}</td>
                     <td>
-                      <SafeLink href={c.evidence_url}>{shortUrl(c.evidence_url, 36)}</SafeLink>
+                      {SOURCE_LABEL[c.source] ?? c.source}
+                      {c.evidence_url && (
+                        <>
+                          {" · "}
+                          <SafeLink href={c.evidence_url}>{shortUrl(c.evidence_url, 36)}</SafeLink>
+                        </>
+                      )}
                     </td>
+                    <td className="small">{hiddenIds.has(c.id) ? "Ẩn khi gửi (tuyển dụng / CSKH)" : (c.note ?? "")}</td>
                   </tr>
                 ))}
               </tbody>

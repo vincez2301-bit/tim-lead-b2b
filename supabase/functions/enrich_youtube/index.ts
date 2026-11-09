@@ -10,6 +10,9 @@ import { type ChannelStats, parseChannelUrl, QuotaExceededError, YoutubeClient }
 import type { Finding } from "../_shared/extract.ts";
 import { confirmedSignals, insertObservations, recomputeScores } from "../_shared/signals.ts";
 import type { EnrichYoutubeResponse } from "../_shared/types.ts";
+import { loadDnc } from "../_shared/dnc.ts";
+import { isRoleEmail } from "../_shared/people.ts";
+import { isHiddenEmail } from "../_shared/people_search.ts";
 
 const MAX_CHANNELS_PER_COMPANY = 5;
 
@@ -62,7 +65,7 @@ serve(async (req, body) => {
     await ctx.db.from("companies").select("id, status").in("id", current),
     "Đọc companies",
   ) as { id: string; status: string }[];
-  const confirmed = await confirmedSignals(ctx.db);
+  const [confirmed, dnc] = await Promise.all([confirmedSignals(ctx.db), loadDnc(ctx.db)]);
   const rules = settings.signal_rules;
 
   const yt = new YoutubeClient({
@@ -70,7 +73,7 @@ serve(async (req, body) => {
     beforeCall: (units) => reserve(ctx.db, runId, ctx.userId, "youtube", units),
   });
 
-  let processed = 0, channelsTotal = 0, skippedNoChannel = 0;
+  let processed = 0, channelsTotal = 0, skippedNoChannel = 0, emailsTotal = 0;
   let stopped: "quota" | "time" | null = null;
   const remaining: string[] = [];
   const touched: string[] = [];
@@ -144,6 +147,7 @@ serve(async (req, body) => {
         },
       ];
       await insertObservations(ctx.db, companyId, findings, confirmed, runId);
+      emailsTotal += await saveChannelEmails(ctx.db, companyId, stats, dnc);
       must(
         await ctx.db.from("companies").update({
           youtube_enriched_at: new Date().toISOString(),
@@ -172,6 +176,7 @@ serve(async (req, body) => {
     channels: channelsTotal,
     units_used: yt.unitsUsed,
     skipped_no_channel: skippedNoChannel,
+    emails: emailsTotal,
     stopped_reason: stopped,
     errors: errors.slice(0, 20),
   };
@@ -188,8 +193,41 @@ serve(async (req, body) => {
     channels: channelsTotal,
     units_used: yt.unitsUsed,
     skipped_no_channel: skippedNoChannel,
+    emails: emailsTotal,
     remaining_ids: allRemaining,
     stopped_reason: stopped,
   };
   return json(res);
 });
+
+/** Email trong mô tả kênh → liên hệ nguồn YouTube (thay bản cũ; bỏ email đã có, DNC, tuyển dụng / CSKH). */
+async function saveChannelEmails(
+  db: Parameters<typeof insertObservations>[0],
+  companyId: string,
+  stats: ChannelStats[],
+  dnc: Awaited<ReturnType<typeof loadDnc>>,
+): Promise<number> {
+  must(await db.from("contacts").delete().eq("company_id", companyId).eq("source", "youtube"), "Xoá email YouTube cũ");
+  const found = new Map<string, ChannelStats>();
+  for (const st of stats) {
+    for (const e of st.emails) if (!found.has(e) && !dnc.isEmail(e) && !isHiddenEmail(e)) found.set(e, st);
+  }
+  if (!found.size) return 0;
+  const have = must(
+    await db.from("contacts").select("email").eq("company_id", companyId).not("email", "is", null),
+    "Đọc email đã có",
+  ) as { email: string }[];
+  const known = new Set(have.map((h) => h.email.toLowerCase()));
+  const rows = [...found.entries()].filter(([e]) => !known.has(e)).map(([e, st]) => ({
+    company_id: companyId,
+    job_title: "Email hợp tác trên kênh YouTube",
+    email: e,
+    email_label: isRoleEmail(e) ? "risky" : "published",
+    confidence: 0.75,
+    source: "youtube",
+    evidence_url: st.url,
+    note: `Ghi trong mô tả kênh ${st.title}`.slice(0, 300),
+  }));
+  if (rows.length) must(await db.from("contacts").insert(rows), "Ghi email YouTube");
+  return rows.length;
+}

@@ -72,9 +72,13 @@ export async function saveContacts(
       "Ghi contacts",
     );
   }
+  // Người tìm được ở nguồn khác (LinkedIn, nhập tay) vẫn tính, để đọc lại website không làm tụt tín hiệu.
+  const { count: others, error: othersErr } = await db.from("contacts").select("id", { count: "exact", head: true })
+    .eq("company_id", c.id).not("full_name", "is", null).in("source", ["linkedin", "manual"]);
+  if (othersErr) throw new Error(`Đếm người liên hệ: ${othersErr.message}`);
   await insertObservations(db, c.id, [{
     code: "DECISION_MAKER_FOUND",
-    value_num: people.length,
+    value_num: people.length + (others ?? 0),
     value_text: people.map((p) => `${p.full_name} — ${p.job_title}`).join("\n") || null,
     confidence: people.length ? Math.max(...people.map((p) => p.confidence)) : 0.7,
     evidence_url: people[0]?.evidence_url ?? homeUrl,

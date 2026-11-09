@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { Copy, ExternalLink, Reply, X } from "lucide-react";
+import { Copy, ExternalLink, Reply, UserSearch, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
-import type { Segment } from "../lib/api-types";
+import type { FindPeopleResponse, Segment } from "../lib/api-types";
+import { callFn } from "../lib/api";
+import { SOURCE_LABEL, canEmail, getContactRoles, rankContacts } from "../lib/contacts";
+import type { ContactSource } from "../lib/db-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtDate } from "../lib/format";
 import {
   BILLING_LABEL,
@@ -80,6 +83,10 @@ interface ContactRow {
   job_title: string | null;
   email: string | null;
   phone: string | null;
+  email_label: string | null;
+  source: ContactSource;
+  evidence_url: string | null;
+  note: string | null;
 }
 
 type Tab = "qualify" | "touches" | "info";
@@ -120,7 +127,7 @@ export function DealPanel({
 
   const [deal, setDeal] = useState<DealRow | null>(null);
   const [acts, setActs] = useState<Activity[]>([]);
-  const [contacts, setContacts] = useState<ContactRow[]>([]);
+  const [allContacts, setContacts] = useState<ContactRow[]>([]);
   const [tab, setTab] = useState<Tab>(initialTab ?? "touches");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -134,11 +141,20 @@ export function DealPanel({
     if (!row) return;
     const [a, c] = await Promise.all([
       supabase.from("activities").select("*").eq("deal_id", dealId).order("happened_at", { ascending: false }),
-      supabase.from("contacts").select("id,full_name,job_title,email,phone").eq("company_id", row.company_id).order("created_at"),
+      supabase
+        .from("contacts")
+        .select("id,full_name,job_title,email,phone,email_label,source,evidence_url,note")
+        .eq("company_id", row.company_id)
+        .order("created_at"),
     ]);
     setActs((a.data ?? []) as Activity[]);
     setContacts((c.data ?? []) as ContactRow[]);
   }, [dealId]);
+
+  // Người đúng vai trò có email lên đầu; email tuyển dụng / CSKH bị ẩn (không bao giờ là người nhận).
+  const roles = useMemo(() => getContactRoles(settings), [settings]);
+  const ranked = useMemo(() => rankContacts(allContacts, deal?.segment ?? null, roles), [allContacts, deal?.segment, roles]);
+  const contacts = ranked.shown;
 
   useEffect(() => {
     setDeal(null);
@@ -348,7 +364,16 @@ export function DealPanel({
                 />
               )}
               {tab === "info" && (
-                <InfoTab deal={deal} contacts={contacts} busy={busy} patch={patch} reload={load} setError={setError} membersName={memberName(members, deal.created_by)} />
+                <InfoTab
+                  deal={deal}
+                  contacts={contacts}
+                  hiddenCount={ranked.hidden.length}
+                  busy={busy}
+                  patch={patch}
+                  reload={load}
+                  setError={setError}
+                  membersName={memberName(members, deal.created_by)}
+                />
               )}
             </div>
           </>
@@ -816,6 +841,7 @@ function TouchesTab({
 function InfoTab({
   deal,
   contacts,
+  hiddenCount,
   busy,
   patch,
   reload,
@@ -824,6 +850,7 @@ function InfoTab({
 }: {
   deal: DealRow;
   contacts: ContactRow[];
+  hiddenCount: number;
   busy: boolean;
   patch: (p: Partial<Deal>, msg?: string) => Promise<void>;
   reload: () => Promise<void>;
@@ -846,6 +873,36 @@ function InfoTab({
     notes: deal.notes ?? "",
   });
   const [c, setC] = useState({ name: "", title: "", email: "", phone: "" });
+  const [finding, setFinding] = useState(false);
+  const [findMsg, setFindMsg] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
+
+  async function findPeople() {
+    setFinding(true);
+    setFindMsg(null);
+    try {
+      const r = await callFn<FindPeopleResponse>("find_people", { company_ids: [deal.company_id], force: true });
+      if (r.stopped_reason === "quota") {
+        setFindMsg({ kind: "warn", text: "Đã hết lượt Google hôm nay — thử lại ngày mai." });
+      } else if (r.skipped_not_in_pipeline) {
+        setFindMsg({ kind: "warn", text: "Chỉ tìm cho công ty đang trong pipeline." });
+      } else if (r.errors.length) {
+        setFindMsg({ kind: "error", text: r.errors[0] });
+      } else {
+        setFindMsg({
+          kind: r.people || r.emails ? "ok" : "warn",
+          text:
+            r.people || r.emails
+              ? `Tìm thấy ${r.people} người qua LinkedIn, ${r.emails} email thật${r.guessed ? `, ${r.guessed} email đoán theo mẫu của công ty` : ""} (dùng ${r.units_used} lượt Google).`
+              : `Chưa thấy người phụ trách hay email nào trên Google (dùng ${r.units_used} lượt). Có thể nhập tay bên dưới.`,
+        });
+      }
+      await reload();
+    } catch (e) {
+      setFindMsg({ kind: "error", text: errMsg(e) });
+    } finally {
+      setFinding(false);
+    }
+  }
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((o) => ({ ...o, [k]: e.target.value }));
   const num = (v: string) => (v.trim() === "" ? null : Number(v));
 
@@ -978,20 +1035,49 @@ function InfoTab({
           </span>
         </div>
       </form>
-      <h3>Người liên hệ ({contacts.length})</h3>
+      <div className="row space-between">
+        <h3>Người liên hệ ({contacts.length})</h3>
+        <button type="button" className="btn-sm" disabled={finding} onClick={() => void findPeople()}>
+          <UserSearch aria-hidden="true" /> {finding ? "Đang tìm…" : "Tìm người phụ trách"}
+        </button>
+      </div>
+      <p className="small muted">
+        Tìm trên LinkedIn công khai và email của công ty trên Google (tối đa 2 lượt Google). Người đúng vai trò có email được xếp đầu và
+        là người nhận mặc định.
+      </p>
+      {findMsg && <Notice kind={findMsg.kind}>{findMsg.text}</Notice>}
       {contacts.length > 0 && (
         <ul className="contacts">
           {contacts.map((x) => (
             <li key={x.id}>
-              <strong>{x.full_name ?? "—"}</strong>
-              {x.job_title && <span className="muted"> · {x.job_title}</span>}
-              <div className="small">
-                {x.email && <a href={`mailto:${x.email}`}>{x.email}</a>}
-                {x.phone && <span className="muted"> · {x.phone}</span>}
+              <div className="row space-between nowrap">
+                <span>
+                  <strong>{x.full_name ?? (x.email ? "Email chung" : "—")}</strong>
+                  {x.job_title && <span className="muted"> · {x.job_title}</span>}
+                </span>
+                <Badge tone={x.source === "linkedin" ? "blue" : "gray"} title={x.evidence_url ?? undefined}>
+                  {SOURCE_LABEL[x.source] ?? x.source}
+                </Badge>
               </div>
+              <div className="small">
+                {x.email && (canEmail(x) ? <a href={`mailto:${x.email}`}>{x.email}</a> : <s className="muted">{x.email}</s>)}
+                {x.email_label === "guess" && <Badge tone="orange">dự đoán</Badge>}
+                {x.email_label === "invalid" && <span className="muted"> (tên miền không nhận email)</span>}
+                {x.phone && <span className="muted"> · {x.phone}</span>}
+                {x.evidence_url && (
+                  <>
+                    {" · "}
+                    <SafeLink href={x.evidence_url}>nguồn</SafeLink>
+                  </>
+                )}
+              </div>
+              {x.note && <div className="small muted">{x.note}</div>}
             </li>
           ))}
         </ul>
+      )}
+      {hiddenCount > 0 && (
+        <p className="small muted">Đã ẩn {hiddenCount} email tuyển dụng / CSKH / kế toán (không dùng để gửi). Xem đủ ở trang công ty.</p>
       )}
       <form className="form-grid" onSubmit={(e) => void addContact(e)}>
         <label>
@@ -1231,7 +1317,7 @@ function Compose({
   busy: boolean;
   onSent: (channel: Channel, outcome: Outcome, note: string, contactId: string | null) => void;
 }) {
-  const withEmail = contacts.filter((c) => c.email);
+  const withEmail = contacts.filter(canEmail);
   const [contactId, setContactId] = useState((withEmail[0] ?? contacts[0])?.id ?? "");
   // Danh bạ tải sau khung soạn: chọn người nhận mặc định khi có dữ liệu.
   useEffect(() => {
