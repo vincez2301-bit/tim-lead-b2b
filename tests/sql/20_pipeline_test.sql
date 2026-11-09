@@ -35,7 +35,7 @@ insert into public.do_not_contact (kind, value, reason) values ('domain', 'block
 
 -- ---------------------------------------------------------------- nhóm broadcaster & cấu hình
 select pg_temp.ok((select segment from public.companies where domain = 'daia.vn') = 'broadcaster', 'segment broadcaster hợp lệ');
-select pg_temp.ok(jsonb_array_length(public.setting('cadence')) = 19, 'lịch 19 điểm chạm');
+select pg_temp.ok(jsonb_array_length(public.setting('cadence')) = 13, 'lịch 13 bước (6 email tiếp cận + chặng chốt 13–19)');
 select pg_temp.ok(jsonb_array_length(public.setting('qualification_criteria')) = 8, '8 tiêu chí đánh giá');
 select pg_temp.ok(public.setting('keyword_sets') ? 'broadcaster', 'bộ từ khoá broadcaster');
 

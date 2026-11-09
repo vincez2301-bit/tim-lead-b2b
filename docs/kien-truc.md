@@ -23,7 +23,7 @@ Supabase (deploy migration + function từ main)
 | 1. Tìm trên Google | Tìm khách mới | `companies`, `run_companies` (mới) | Ngay dưới form: bảng kết quả của lượt tìm; cũng có trong **Công ty** |
 | 2. Phân tích website | nút trong bảng kết quả / Công ty | `observations`, `contacts`, `companies.score` | Cột Phân tích + Điểm của bảng kết quả; trang chi tiết công ty |
 | 3. Đưa vào Pipeline | nút trong bảng kết quả / Công ty | `deals` (Lead mới) | **Hôm nay → Cần đánh giá**, cột Lead mới của **Pipeline** |
-| 4. Tiếp cận 19 điểm chạm | Hôm nay → Bắt đầu | `activities`, `deals.next_action*` | Hôm nay, Pipeline, khung chi tiết deal |
+| 4. Tiếp cận chỉ email (6 email + chặng chốt) | Hôm nay → Bắt đầu | `activities`, `deals.next_action*` | Hôm nay, Pipeline, khung chi tiết deal |
 | 5. Khách từ chối | khung deal → “Khách từ chối…” | `deals.lost_reason_code`, ngày liên hệ lại | **Xử lý từ chối** (theo lý do), Hôm nay khi đến hạn |
 
 Trước đây bước 1 chỉ hiện con số (“7 mới, 3 đã có”), không có danh sách công ty và không nói chúng nằm ở đâu.

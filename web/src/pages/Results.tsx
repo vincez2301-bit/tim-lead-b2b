@@ -218,7 +218,7 @@ export function ResultsPage() {
           <div className="grid two">
             <div className="card">
               <h2>Khách trả lời sau bao nhiêu lần liên hệ</h2>
-              <p className="small muted">Cho biết có nên kiên trì đủ lịch 19 điểm chạm hay không.</p>
+              <p className="small muted">Cho biết có nên kiên trì đủ chuỗi email hay không.</p>
               {r.afterTouches.size === 0 ? (
                 <EmptyState title="Chưa có khách trả lời trong khoảng này." />
               ) : (

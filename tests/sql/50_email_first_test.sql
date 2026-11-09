@@ -9,22 +9,20 @@ end $$;
 
 select pg_temp.ok((select value->0->>'channel' from public.settings where key = 'cadence') = 'email', 'bước 1 là email');
 select pg_temp.ok((select (value->0->>'step')::int from public.settings where key = 'cadence') = 1, 'số bước vẫn bắt đầu từ 1');
-select pg_temp.ok((select value->1->>'channel' from public.settings where key = 'cadence') = 'linkedin', 'bước 2 là LinkedIn');
-select pg_temp.ok((select value->11->>'title' from public.settings where key = 'cadence') like 'Email: xin phép tạm dừng%', 'lịch khớp bộ email v4');
-select pg_temp.ok(jsonb_array_length((select value from public.settings where key = 'cadence')) = 19, 'vẫn đủ 19 bước');
+select pg_temp.ok((select value->1->>'channel' from public.settings where key = 'cadence') = 'email', 'bước 2 cũng là email (chỉ email)');
+select pg_temp.ok((select value->5->>'title' from public.settings where key = 'cadence') = 'Email chia tay lịch sự', 'email thứ 6 là chia tay');
 select pg_temp.ok((select bool_and(e->>'channel' = 'email') from public.settings s, jsonb_array_elements(s.value) e
                    where s.key = 'message_templates' and (e->>'step')::int = 1), 'mẫu bước 1 đều là email');
 select pg_temp.ok((select count(*) from public.settings s, jsonb_array_elements(s.value) e
                    where s.key = 'message_templates' and (e->>'step')::int = 1) = 5, '5 email mở lời theo nhóm khách');
-select pg_temp.ok((select e->>'channel' from public.settings s, jsonb_array_elements(s.value) e
-                   where s.key = 'message_templates' and (e->>'step')::int = 2) = 'linkedin', 'mẫu bước 2 là LinkedIn');
-select pg_temp.ok((select jsonb_array_length(value) from public.settings where key = 'message_templates') = 24, 'đủ 24 mẫu (20 mẫu v4 + 4 mẫu chặng chốt)');
-select pg_temp.ok((select count(*) from public.settings s, jsonb_array_elements(s.value) e
-                   where s.key = 'message_templates' and e->>'channel' = 'email' and e ? 'subject') = 14, 'email nào cũng có tiêu đề');
-select pg_temp.ok((select bool_and((e->>'version')::int >= 4) from public.settings s, jsonb_array_elements(s.value) e
-                   where s.key = 'message_templates'), 'đang dùng bộ v4');
+select pg_temp.ok((select jsonb_array_length(value) from public.settings where key = 'message_templates') = 38,
+                  'đủ 38 mẫu (30 email tiếp cận + 7 chặng chốt + nuôi dưỡng)');
+select pg_temp.ok((select bool_and(e ? 'subject') from public.settings s, jsonb_array_elements(s.value) e
+                   where s.key = 'message_templates'), 'email nào cũng có tiêu đề');
+select pg_temp.ok((select bool_and((e->>'version')::int = 6) from public.settings s, jsonb_array_elements(s.value) e
+                   where s.key = 'message_templates'), 'đang dùng bộ v6');
 select pg_temp.ok((select bool_and(e->>'body' like 'Kính gửi {xung_ho},%') from public.settings s, jsonb_array_elements(s.value) e
-                   where s.key = 'message_templates' and e->>'channel' = 'email'), 'email mở đầu trang trọng');
+                   where s.key = 'message_templates'), 'email mở đầu trang trọng');
 
 
 -- apply_sales_defaults_v3: chỉ admin.

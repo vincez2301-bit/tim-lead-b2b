@@ -210,7 +210,7 @@ export function ClosePlan({
                 next_action_at: addDays(todayIso(), 2),
                 ...(deal.expected_close ? {} : { expected_close: sending.valid_until }),
               },
-              msg: `Đã gửi báo giá ${sending.number} → Đề xuất. Hai ngày nữa app nhắc gọi theo dõi; báo giá hết hạn ${fmtDay(sending.valid_until)}.`,
+              msg: `Đã gửi báo giá ${sending.number} → Đề xuất. Hai ngày nữa app nhắc gửi email theo dõi; báo giá hết hạn ${fmtDay(sending.valid_until)}.`,
             });
             setMode("");
           }}
@@ -551,7 +551,7 @@ function SendQuote({
           → chọn “Lưu dưới dạng PDF”.
         </li>
         <li>Mở email, đính kèm file PDF, gửi.</li>
-        <li>Bấm “✓ Đã gửi báo giá”: app chuyển khách sang Đề xuất và hẹn ngày gọi theo dõi.</li>
+        <li>Bấm “✓ Đã gửi báo giá”: app chuyển khách sang Đề xuất và hẹn ngày gửi email theo dõi.</li>
       </ol>
       <label>
         Tiêu đề

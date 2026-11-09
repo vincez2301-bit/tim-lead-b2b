@@ -49,7 +49,7 @@ const KEY_INFO: Record<string, { label: string; help: string; shape: "array" | "
     shape: "object",
   },
   cadence: {
-    label: "Lịch 19 điểm chạm",
+    label: "Lịch tiếp cận (chỉ email)",
     help: 'Các bước: [{"step":1,"day":0,"channel":"email|call|zalo|linkedin|meeting|event|other","title":"…","hint":"…"}]. day = số ngày kể từ khi bắt đầu tiếp cận.',
     shape: "array",
   },

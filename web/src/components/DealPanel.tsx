@@ -45,7 +45,12 @@ import {
   STAGE_PROBABILITY,
   TIER_HINT,
   TIER_SHORT,
-  TOUCH_GOAL,
+  OUTREACH_DONE,
+  nextOutreachStep,
+  outreachSent,
+  outreachSteps,
+  personalLine,
+  type YtFacts,
   addDays,
   dueDateFor,
   dueState,
@@ -128,6 +133,7 @@ export function DealPanel({
   const [deal, setDeal] = useState<DealRow | null>(null);
   const [acts, setActs] = useState<Activity[]>([]);
   const [allContacts, setContacts] = useState<ContactRow[]>([]);
+  const [yt, setYt] = useState<YtFacts | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab ?? "touches");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -149,6 +155,21 @@ export function DealPanel({
     ]);
     setActs((a.data ?? []) as Activity[]);
     setContacts((c.data ?? []) as ContactRow[]);
+    // Dữ liệu cho câu riêng về khách trong email mở lời (kênh YouTube app đã thu thập).
+    const o = await supabase
+      .from("observations")
+      .select("signal_code,value_num,value_text")
+      .eq("company_id", row.company_id)
+      .in("signal_code", ["YT_SUBSCRIBERS", "YT_UPLOAD_FREQ", "MULTI_CHANNEL_OWNER"])
+      .order("observed_at", { ascending: false })
+      .limit(15);
+    const latest = (code: string) => (o.data ?? []).find((x) => x.signal_code === code) as
+      | { value_num: number | null; value_text: string | null }
+      | undefined;
+    const subs = latest("YT_SUBSCRIBERS");
+    const multi = latest("MULTI_CHANNEL_OWNER")?.value_text?.split("\n")[0]?.replace(/\s*\(https?:[^)]*\)\s*$/, "") ?? null;
+    const channel = subs?.value_text && subs.value_text !== "Kênh ẩn số subscriber" ? subs.value_text : multi;
+    setYt(channel ? { channel, subscribers: subs?.value_num ?? null, videos90d: latest("YT_UPLOAD_FREQ")?.value_num ?? null } : null);
   }, [dealId]);
 
   // Người đúng vai trò có email lên đầu; email tuyển dụng / CSKH bị ẩn (không bao giờ là người nhận).
@@ -289,7 +310,7 @@ export function DealPanel({
                 {(
                   [
                     ["qualify", "Đánh giá"],
-                    ["touches", `Điểm chạm (${deal.touches}/${TOUCH_GOAL})`],
+                    ["touches", `Điểm chạm (${deal.touches})`],
                     ["info", "Thông tin & liên hệ"],
                   ] as [Tab, string][]
                 ).map(([k, l]) => (
@@ -346,6 +367,7 @@ export function DealPanel({
                   deal={deal}
                   acts={acts}
                   contacts={contacts}
+                  personal={personalLine(deal.company_name, yt)}
                   cadence={cadence}
                   members={members}
                   playbook={playbook}
@@ -539,6 +561,7 @@ function TouchesTab({
   deal,
   acts,
   contacts,
+  personal,
   cadence,
   members,
   playbook,
@@ -555,6 +578,8 @@ function TouchesTab({
   deal: DealRow;
   acts: Activity[];
   contacts: ContactRow[];
+  /** Câu riêng về khách ({cau_rieng}). */
+  personal: string;
   cadence: ReturnType<typeof getCadence>;
   members: ReturnType<typeof useMembers>;
   playbook: Objection[];
@@ -571,7 +596,10 @@ function TouchesTab({
   const talking = isTalking(deal.stage);
   const doneSteps = useMemo(() => new Set(acts.map((a) => a.step).filter((n): n is number => n !== null)), [acts]);
   // Khách đã trả lời: bước kế tiếp theo giai đoạn (13–19), không theo số điểm chạm.
-  const step = talking ? (closeStep(cadence, deal.stage, doneSteps) ?? nextStep(cadence, acts.length)) : nextStep(cadence, acts.length);
+  // Chặng tiếp cận chỉ email: email kế tiếp theo số email đã gửi.
+  const sent = outreachSent(acts);
+  const goal = outreachSteps(cadence).length;
+  const step = talking ? (closeStep(cadence, deal.stage, doneSteps) ?? nextStep(cadence, acts.length)) : nextOutreachStep(cadence, sent);
   const [channel, setChannel] = useState<Channel>(step?.channel ?? "email");
   const [outcome, setOutcome] = useState<Outcome>("done");
   const [contactId, setContactId] = useState("");
@@ -622,13 +650,13 @@ function TouchesTab({
       });
       if (ins.error) throw ins.error;
       // Lên lịch việc tiếp theo.
-      const touches = acts.length + 1;
       let p: Partial<Deal>;
       let msg: string;
       if ((outcome === "replied" || outcome === "positive") && ["new", "research", "outreach", "nurture"].includes(deal.stage)) {
-        // Trả lời trong ngày: khách vừa trả lời là lúc dễ hẹn lịch nhất.
-        p = { stage: "connected", next_action: "Hẹn buổi tìm hiểu nhu cầu", next_action_at: todayIso() };
-        msg = "Khách đã phản hồi → Đã phản hồi. Việc ngay hôm nay: hẹn buổi tìm hiểu nhu cầu (mẫu email ở bước 13).";
+        // Trả lời trong ngày: khách vừa trả lời là lúc dễ hỏi tiếp nhất.
+        const first = cadence.find((c) => c.step === 13)?.title ?? "Hỏi nhu cầu (3 câu hỏi)";
+        p = { stage: "connected", next_action: first, next_action_at: todayIso() };
+        msg = `Khách đã phản hồi → Đã phản hồi. Việc ngay hôm nay: ${first.toLowerCase()} (mẫu email ở bước 13).`;
       } else if (deal.stage === "nurture") {
         const re = deal.lost_reason_code ? reengageDate(deal.lost_reason_code, deal.contract_end, budgetMonth) : addDays(todayIso(), 90);
         const monthly = addDays(todayIso(), 30);
@@ -649,15 +677,16 @@ function TouchesTab({
         if (newStage !== deal.stage) p = { ...p, stage: newStage };
         msg = `Đã ghi.${newStage !== deal.stage ? ` Chuyển sang ${STAGE_LABEL[newStage]}.` : ""} Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`;
       } else {
-        const nxt = nextStep(cadence, touches);
+        const sentAfter = sent + (a.channel === "email" ? 1 : 0);
+        const nxt = nextOutreachStep(cadence, sentAfter);
         p = nxt
           ? { next_action: nxt.title, next_action_at: dueDateFor(nxt, preQualified ? todayIso() : deal.cadence_started_at) }
-          : { next_action: "Đã đủ 19 điểm chạm — chốt hoặc chuyển Nuôi dưỡng", next_action_at: addDays(todayIso(), 2) };
+          : { next_action: OUTREACH_DONE, next_action_at: addDays(todayIso(), 5) };
         // Lead mới: điểm chạm đầu tiên (thường là email mở lời) bắt đầu lịch tiếp cận.
         if (preQualified) p = { ...p, stage: "outreach", cadence_started_at: todayIso() };
         msg = preQualified
           ? `Đã bắt đầu tiếp cận ${deal.company_name}. Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`
-          : `Đã ghi điểm chạm ${touches}/${TOUCH_GOAL}. Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`;
+          : `Đã ghi (${sentAfter}/${goal} email). Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`;
       }
       if (a.patch) p = { ...p, ...a.patch };
       if (a.msg) msg = a.msg;
@@ -681,15 +710,13 @@ function TouchesTab({
     else await reload();
   }
 
-  const pct = Math.min(100, Math.round((100 * acts.length) / TOUCH_GOAL));
+  const pct = talking ? 100 : Math.min(100, Math.round((100 * sent) / Math.max(1, goal)));
   const due = dueState(deal.next_action_at);
   return (
     <div className="stack">
       <div className="touch-progress">
         <div className="row space-between">
-          <strong>
-            {acts.length}/{TOUCH_GOAL} điểm chạm
-          </strong>
+          <strong>{talking || deal.stage === "won" ? `${acts.length} điểm chạm` : `${sent}/${goal} email`}</strong>
           <span className={`due due-${due}`}>
             {deal.next_action ? `${deal.next_action} · ${fmtDay(deal.next_action_at)}` : "Chưa có việc tiếp theo"}
           </span>
@@ -747,6 +774,8 @@ function TouchesTab({
           deal={deal}
           step={composeStep}
           template={pickTemplate(templates, composeStep.step, deal.segment)}
+          firstTemplate={pickTemplate(templates, 1, deal.segment)}
+          personal={personal}
           sender={sender}
           contacts={contacts}
           playlists={playlists}
@@ -1302,6 +1331,8 @@ function Compose({
   deal,
   step,
   template,
+  firstTemplate,
+  personal,
   sender,
   contacts,
   playlists,
@@ -1311,6 +1342,9 @@ function Compose({
   deal: DealRow;
   step: { step: number; channel: Channel; title: string };
   template: MessageTemplate | null;
+  /** Email mở lời: email theo dõi trả lời trong cùng luồng (“Re: …”). */
+  firstTemplate: MessageTemplate | null;
+  personal: string;
   sender: Sender;
   contacts: ContactRow[];
   playlists: Playlist[];
@@ -1336,7 +1370,9 @@ function Compose({
     cong_ty_ban: sender.company || "Epidemic Sound tại Việt Nam",
     sdt: sender.phone,
     chu_ky: signature(sender),
+    cau_rieng: personal,
   };
+  vars.tieu_de_dau = firstTemplate?.subject ? renderTemplate(firstTemplate.subject, vars) : `Epidemic Sound và ${deal.company_name}`;
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [copied, setCopied] = useState(false);
@@ -1344,7 +1380,7 @@ function Compose({
     setSubject(template?.subject ? renderTemplate(template.subject, vars) : "");
     setBody(template ? renderTemplate(template.body, vars) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template, contactId, pl?.url, sender.name]);
+  }, [template, contactId, pl?.url, sender.name, personal]);
 
   if (!template) {
     return (
@@ -1389,7 +1425,13 @@ function Compose({
         {ch === "call" ? "Kịch bản" : "Nội dung"}
         <textarea rows={ch === "email" ? 18 : 6} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
-      {body.includes("[") && <p className="small muted">Điền các chỗ trong ngoặc vuông [ … ] trước khi gửi.</p>}
+      {ch === "email" && subject.startsWith("Re:") && (
+        <p className="small muted">
+          Nên gửi trong cùng luồng: mở email mở lời đã gửi trong hộp thư → Trả lời → dán nội dung (nút Chép). Không thấy luồng cũ thì bấm
+          Mở email.
+        </p>
+      )}
+      {body.includes("[") && <Notice kind="warn">Còn chỗ trong ngoặc vuông [ … ] cần tự điền trước khi gửi.</Notice>}
       <div className="row">
         {mailto && (
           <a className="btn btn-primary" href={mailto}>

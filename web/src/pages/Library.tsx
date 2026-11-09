@@ -43,6 +43,8 @@ const VARS: [string, string][] = [
   ["{ten}", "tên gọi của người nhận"],
   ["{cong_ty}", "tên công ty khách"],
   ["{playlist}", "link playlist hợp nhóm khách"],
+  ["{cau_rieng}", "câu riêng về khách (từ kênh YouTube; thiếu dữ liệu thì để chỗ trống [ … ] để tự viết)"],
+  ["{tieu_de_dau}", "tiêu đề email mở lời — email theo dõi dùng “Re: {tieu_de_dau}” để cùng luồng"],
   ["{nguoi_gui}", "tên bạn"],
   ["{chuc_danh}", "chức danh"],
   ["{cong_ty_ban}", "công ty bạn"],
@@ -96,7 +98,7 @@ export function EmailLibraryPage() {
   };
   const show = (t: string) => (preview ? renderTemplate(t, sample) : t);
 
-  // Gom mẫu theo bước của lịch 19 điểm chạm (bước 90 = nuôi dưỡng sau khi từ chối).
+  // Gom mẫu theo bước của lịch tiếp cận (bước 90 = nuôi dưỡng sau khi từ chối).
   const groups = useMemo(() => {
     const list = templates
       .map((t, i) => ({ t, i }))
@@ -155,7 +157,7 @@ export function EmailLibraryPage() {
     <section>
       <PageHeader
         title="Email & tin nhắn mẫu"
-        description="Nội dung cho từng bước trong lịch 19 điểm chạm. Khi bạn mở một khách ở Hôm nay, app tự chọn đúng mẫu theo bước và nhóm khách, điền tên, công ty, playlist và chữ ký."
+        description="Nội dung cho từng bước trong lịch tiếp cận (chỉ email). Khi bạn mở một khách ở Hôm nay, app tự chọn đúng mẫu theo bước và nhóm khách, điền tên, công ty, câu riêng về khách ({cau_rieng}), playlist và chữ ký; email theo dõi dùng tiêu đề “Re: {tieu_de_dau}”."
         actions={
           isAdmin && (
             <button type="button" className="btn-primary" onClick={() => startEdit("new")}>
@@ -165,20 +167,20 @@ export function EmailLibraryPage() {
         }
       />
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
-      {isAdmin && !templates.some((t) => (t as MessageTemplate & { version?: number }).version === 4) && (
+      {isAdmin && !templates.some((t) => (t as MessageTemplate & { version?: number }).version === 6) && (
         <div className="card start-session">
           <div>
-            <strong>Có bộ email mẫu mới (bản trang trọng)</strong>
+            <strong>Có bộ email mẫu mới (chỉ email)</strong>
             <div className="small muted">
-              “Kính gửi chị Lan”, giới thiệu người gửi và Epidemic Sound, 3 lợi ích theo nhóm khách, đề xuất buổi trao đổi, chữ ký
-              đầy đủ; bước 1 là email. App chưa tự cập nhật vì bạn đã sửa mẫu — bấm để thay (các mẫu bạn đã sửa sẽ bị thay).
+              6 email tiếp cận cho từng nhóm khách, mỗi email một lý do để dùng Epidemic Sound; email theo dõi giữ tiêu đề “Re: …”;
+              chặng chốt cũng qua email. Bấm để thay lịch và toàn bộ nội dung soạn sẵn.
             </div>
           </div>
           <button
             type="button"
             className="btn-primary"
             onClick={async () => {
-              if (!(await confirmDialog({ title: "Thay bằng bộ email mẫu mới?", message: "Lịch 19 bước và toàn bộ nội dung soạn sẵn sẽ được thay.", confirmLabel: "Thay" }))) return;
+              if (!(await confirmDialog({ title: "Thay bằng bộ email mẫu mới?", message: "Lịch tiếp cận và toàn bộ nội dung soạn sẵn sẽ được thay.", confirmLabel: "Thay" }))) return;
               const { error } = await supabase.rpc("apply_sales_defaults");
               if (error) setMsg({ kind: "error", text: error.message });
               else {

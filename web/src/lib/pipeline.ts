@@ -1,4 +1,4 @@
-// Pipeline bán hàng: kiểu dữ liệu, nhãn, lịch 19 điểm chạm, gợi ý hạng (tier) và dự báo.
+// Pipeline bán hàng: kiểu dữ liệu, nhãn, lịch tiếp cận chỉ email (6 email + chặng chốt 13–19), gợi ý hạng (tier) và dự báo.
 import { useEffect, useState } from "react";
 import type { Segment } from "./api-types";
 import type { SettingsMap } from "./settings";
@@ -63,6 +63,8 @@ export interface DealRow extends Deal {
   is_dnc: boolean;
   touches: number;
   last_touch_at: string | null;
+  /** Số email đã gửi ở chặng tiếp cận (bước < 13 hoặc ghi tay) — quyết định email kế tiếp. */
+  outreach_emails: number;
 }
 
 export interface Activity {
@@ -96,7 +98,6 @@ export interface Member {
   role: string;
 }
 
-export const TOUCH_GOAL = 19;
 
 /** Giai đoạn đang mở, theo thứ tự trên bảng. */
 export const OPEN_STAGES: Stage[] = ["new", "research", "outreach", "connected", "meeting", "proposal", "commit"];
@@ -346,9 +347,9 @@ export const TIER_HINT: Record<Tier, string> = {
 export const SEGMENT_PRIORITY: Record<Segment, number> = { broadcaster: 40, mcn: 35, agency: 30, film: 25, brand: 20 };
 
 const DEFAULT_CADENCE: CadenceStep[] = [
-  { step: 1, day: 0, channel: "linkedin", title: "Gửi kết nối LinkedIn" },
-  { step: 2, day: 0, channel: "email", title: "Email mở lời cá nhân hoá" },
-  { step: 3, day: 1, channel: "call", title: "Gọi điện lần 1" },
+  { step: 1, day: 0, channel: "email", title: "Email mở lời" },
+  { step: 2, day: 3, channel: "email", title: "Email theo dõi 1: rủi ro bản quyền" },
+  { step: 3, day: 7, channel: "email", title: "Email theo dõi 2: thử nhạc miễn phí trên video của khách" },
 ];
 
 export function getCadence(s: SettingsMap): CadenceStep[] {
@@ -395,6 +396,28 @@ export function suggestTier(
 /** Bước kế tiếp trong lịch (dựa trên số điểm chạm đã ghi). */
 export function nextStep(cadence: CadenceStep[], touches: number): CadenceStep | null {
   return cadence.find((c) => c.step > touches) ?? null;
+}
+
+/** Bước đầu của chặng chốt; các bước nhỏ hơn là chuỗi email tiếp cận. */
+export const CLOSE_FIRST_STEP = 13;
+export const OUTREACH_DONE = "Đã gửi đủ chuỗi email — chuyển Nuôi dưỡng nếu khách chưa trả lời";
+
+export function outreachSteps(cadence: CadenceStep[]): CadenceStep[] {
+  return cadence.filter((c) => c.step < CLOSE_FIRST_STEP);
+}
+/** Email kế tiếp ở chặng tiếp cận: email thứ (số email đã gửi + 1); null = đã gửi đủ. */
+export function nextOutreachStep(cadence: CadenceStep[], sent: number): CadenceStep | null {
+  return outreachSteps(cadence)[sent] ?? null;
+}
+/** Số email đã gửi ở chặng tiếp cận (bước < 13 hoặc ghi tay), khớp cột deal_board.outreach_emails. */
+export function outreachSent(acts: Pick<Activity, "channel" | "step">[]): number {
+  return acts.filter((a) => a.channel === "email" && (a.step === null || a.step < CLOSE_FIRST_STEP)).length;
+}
+/** “2/6 email” cho lead đang tiếp cận; số điểm chạm cho các giai đoạn khác. */
+export function progressText(r: Pick<DealRow, "stage" | "touches" | "outreach_emails">, cadence: CadenceStep[]): string {
+  return r.stage === "new" || r.stage === "research" || r.stage === "outreach"
+    ? `${r.outreach_emails ?? 0}/${outreachSteps(cadence).length} email`
+    : `${r.touches} điểm chạm`;
 }
 
 export function isoDate(d: Date): string {
@@ -548,6 +571,23 @@ export function addressFor(fullName: string | null, company: string): { ten: str
   return { ten, anh_chi, xung_ho: `${anh_chi} ${ten}` };
 }
 
+export interface YtFacts {
+  channel: string | null;
+  subscribers: number | null;
+  videos90d: number | null;
+}
+/** Câu riêng về khách cho email mở lời ({cau_rieng}); thiếu dữ liệu thì để chỗ trống đánh dấu để tự viết. */
+export function personalLine(company: string, yt: YtFacts | null): string {
+  if (yt?.channel) {
+    const vids = yt.videos90d ? `${yt.videos90d} video trong 3 tháng gần đây` : null;
+    const subs = yt.subscribers ? `${yt.subscribers.toLocaleString("vi-VN")} người đăng ký` : null;
+    const facts = [vids, subs].filter(Boolean).join(", ");
+    const busy = (yt.videos90d ?? 0) >= 6 ? " — với nhịp đăng đều như vậy, chọn nhạc nền chắc chiếm không ít thời gian của đội sản xuất." : ".";
+    return `Em có xem kênh YouTube ${yt.channel} của ${company}${facts ? ` (${facts})` : ""}${busy}`;
+  }
+  return `[Một câu riêng về ${company}: dự án hoặc video gần đây anh/chị đã xem]`;
+}
+
 export function renderTemplate(text: string, vars: Record<string, string>): string {
   return text.replace(/\{([a-z_]+)\}/g, (m, k: string) => (k in vars ? vars[k] : m));
 }
@@ -613,8 +653,8 @@ export const PHASE_LABEL: Record<Phase, string> = {
 };
 export const PHASE_HINT: Record<Phase, string> = {
   start: "Lead mới. Việc đầu tiên: gửi email mở lời.",
-  outreach: "Đã gửi email, đang theo lịch 19 điểm chạm cho tới khi khách trả lời.",
-  talking: "Khách đã trả lời: hẹn gặp, demo, gửi đề xuất, chốt.",
+  outreach: "Đã gửi email mở lời, đang theo chuỗi email cho tới khi khách trả lời.",
+  talking: "Khách đã trả lời: hỏi nhu cầu, gửi minh hoạ nhạc, báo giá, chốt — đều qua email.",
   won: "Khách đã ký: chăm sóc và chốt gia hạn.",
   paused: "Khách từ chối hoặc chưa đúng lúc: liên hệ lại đúng hẹn.",
 };
@@ -627,10 +667,10 @@ export function phaseOf(stage: Stage): Phase {
 }
 
 const STAGE_DEFAULT_ACTION: Partial<Record<Stage, string>> = {
-  connected: "Hẹn buổi tìm hiểu nhu cầu",
-  meeting: "Gặp / demo cho khách",
-  proposal: "Theo dõi đề xuất",
-  commit: "Ký hợp đồng",
+  connected: "Hỏi nhu cầu (3 câu hỏi)",
+  meeting: "Gửi minh hoạ nhạc trên nội dung của khách",
+  proposal: "Email theo dõi đề xuất",
+  commit: "Gửi hợp đồng",
   nurture: "Liên hệ lại",
 };
 
@@ -639,7 +679,7 @@ export interface NextMove {
   channel: Channel | null;
   /** Ngày nên làm; null = chưa lên lịch (lead mới chờ tới lượt, hoặc chưa đặt hạn). */
   due: string | null;
-  /** Bước trong lịch 19 điểm chạm (nếu có). */
+  /** Bước trong lịch (nếu có). */
   step: number | null;
 }
 
@@ -648,10 +688,10 @@ export function nextMove(r: DealRow, cadence: CadenceStep[]): NextMove {
   if (r.stage === "lost") return { title: "Đã đóng", channel: null, due: null, step: null };
   if (r.stage === "won") {
     return r.renewal_at
-      ? { title: `Chốt gia hạn (hết hạn ${fmtDay(r.renewal_at)})`, channel: "call", due: addDays(r.renewal_at, -RENEWAL_WINDOW_DAYS), step: null }
+      ? { title: `Email chốt gia hạn (hết hạn ${fmtDay(r.renewal_at)})`, channel: "email", due: addDays(r.renewal_at, -RENEWAL_WINDOW_DAYS), step: null }
       : { title: "Chăm sóc khách đã ký", channel: null, due: null, step: null };
   }
-  const s = nextStep(cadence, r.touches);
+  const s = nextOutreachStep(cadence, r.outreach_emails ?? 0);
   if (r.stage === "new" || r.stage === "research") {
     return { title: s?.title ?? "Email mở lời", channel: s?.channel ?? "email", due: r.next_action_at, step: s?.step ?? 1 };
   }
@@ -659,7 +699,7 @@ export function nextMove(r: DealRow, cadence: CadenceStep[]): NextMove {
     // Việc đã đặt khác bước trong lịch (đặt tay, hoặc lịch đã đổi) thì không đoán kênh.
     const matches = !r.next_action || r.next_action === s?.title;
     return {
-      title: r.next_action ?? s?.title ?? "Chọn việc tiếp theo",
+      title: r.next_action ?? s?.title ?? OUTREACH_DONE,
       channel: matches ? (s?.channel ?? null) : null,
       due: r.next_action_at,
       step: matches ? (s?.step ?? null) : null,

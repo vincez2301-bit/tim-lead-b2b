@@ -1,6 +1,6 @@
 # 002 — Chỉ tiếp cận bằng email: chuỗi email thuyết phục dùng nhạc Epidemic Sound
 
-- **Trạng thái:** Nháp <!-- Nháp → Đã duyệt (ngày) → Đã xong (commit) -->
+- **Trạng thái:** Đã xong (2026-11-09) <!-- Nháp → Đã duyệt (ngày) → Đã xong (commit) -->
 - **Người duyệt:** Việt
 
 ## Vấn đề / mục tiêu
@@ -27,14 +27,14 @@ Mục tiêu: chỉ dùng email. Mỗi email đưa một lý do rõ ràng để d
 Nuôi dưỡng: mỗi tháng một email ngắn (playlist theo mùa / dịp, tin bản quyền). Gia hạn: email trước 90 ngày thay cho cuộc gọi.
 
 ## Tiêu chí nghiệm thu
-- [ ] Lịch mặc định chỉ còn bước email (và họp online khi khách đề nghị); Hôm nay, Pipeline, email nhắc việc mỗi sáng không còn việc gọi điện / Zalo / LinkedIn.
-- [ ] Có 6 email mẫu mới cho chặng tiếp cận × 5 nhóm khách (đài truyền hình, MCN, production house, hãng phim, nhãn hàng) và email mẫu cho các bước chốt; mỗi email dưới ~120 chữ, một lời đề nghị duy nhất.
-- [ ] Câu riêng về khách tự điền khi có dữ liệu; thiếu dữ liệu thì hiện chỗ trống được đánh dấu, không gửi câu chung chung.
-- [ ] Email theo dõi giữ tiêu đề “Re: …” của email mở lời và có nhắc trả lời trong luồng cũ.
-- [ ] Khách đang ở giữa lịch cũ (đang chờ bước gọi / Zalo / LinkedIn) chuyển sang email kế tiếp phù hợp, không mất lịch sử điểm chạm.
-- [ ] Mọi thông tin về Epidemic Sound trong email (số bài nhạc, Content ID, quyền biểu diễn, giá) lấy từ tài liệu bạn đã đưa; chỗ nào chưa chắc thì đánh dấu “cần kiểm tra” để bạn duyệt trước.
-- [ ] Bạn vẫn sửa được lịch và email mẫu trong Cài đặt / Kho nội dung như hiện nay.
-- [ ] Trên điện thoại vẫn dùng được.
+- [x] Lịch mặc định chỉ còn bước email (và họp online khi khách đề nghị); Hôm nay, Pipeline, email nhắc việc mỗi sáng không còn việc gọi điện / Zalo / LinkedIn.
+- [x] Có 6 email mẫu mới cho chặng tiếp cận × 5 nhóm khách (đài truyền hình, MCN, production house, hãng phim, nhãn hàng) và email mẫu cho các bước chốt; mỗi email dưới ~120 chữ, một lời đề nghị duy nhất.
+- [x] Câu riêng về khách tự điền khi có dữ liệu; thiếu dữ liệu thì hiện chỗ trống được đánh dấu, không gửi câu chung chung.
+- [x] Email theo dõi giữ tiêu đề “Re: …” của email mở lời và có nhắc trả lời trong luồng cũ.
+- [x] Khách đang ở giữa lịch cũ (đang chờ bước gọi / Zalo / LinkedIn) chuyển sang email kế tiếp phù hợp, không mất lịch sử điểm chạm.
+- [x] Mọi thông tin về Epidemic Sound trong email (số bài nhạc, Content ID, quyền biểu diễn, giá) lấy từ tài liệu bạn đã đưa; chỗ nào chưa chắc thì đánh dấu “cần kiểm tra” để bạn duyệt trước.
+- [x] Bạn vẫn sửa được lịch và email mẫu trong Cài đặt / Kho nội dung như hiện nay.
+- [x] Trên điện thoại vẫn dùng được.
 
 ## Không làm (lần này)
 - App tự gửi email thay bạn (vẫn gửi từ hộp thư của bạn).
@@ -42,16 +42,16 @@ Nuôi dưỡng: mỗi tháng một email ngắn (playlist theo mùa / dịp, tin
 - Xoá số điện thoại đã lưu (vẫn giữ, chỉ không tạo việc gọi).
 
 ## Ảnh hưởng & chi phí
-- **Dữ liệu:** không thêm bảng; thay lịch mặc định (`settings.cadence`) và email mẫu (`settings.message_templates`) bằng bản mới. Lịch / mẫu bạn đã tự sửa thì giữ nguyên, có nút “Dùng lịch & mẫu mặc định mới” ở Cài đặt.
+- **Dữ liệu:** không thêm bảng; thay lịch (`settings.cadence`) và email mẫu (`settings.message_templates`) bằng bản mới. *Đổi khi làm:* lịch và mẫu cũ không giữ song song được (bước 2–6 cũ là LinkedIn / gọi / Zalo, giữ lại sẽ lệch với lịch chỉ email), nên app sao lưu bản đang dùng vào `cadence_backup_v4` / `message_templates_backup_v4` rồi thay. View `deal_board` thêm cột `outreach_emails`.
 - **Hạn mức / tiền:** không tốn thêm lượt Google/YouTube hay tiền.
 - **Triển khai:** đẩy `main` = chạy thật; không cần bật gì thêm.
 
-## Câu hỏi còn mở
-1. 6 email trong ~4 tuần như bảng trên có ổn không, hay bạn muốn ít hơn (vd. 4 email)?
-2. Bạn có ví dụ khách cùng ngành (công khai, được phép nhắc tên) cho email ngày 18 không? Chưa có thì mình viết dạng “các đài / MCN / agency trong khu vực” không nêu tên.
-3. Email gửi bằng tiếng Việt cho mọi khách, hay cần thêm bản tiếng Anh cho công ty nước ngoài / khách quốc tế?
+## Câu hỏi còn mở (đã chốt khi duyệt, theo mặc định đề xuất)
+1. 6 email trong ~4 tuần như bảng trên.
+2. Chưa có ví dụ khách được phép nêu tên → email ngày 18 nói chung “các đơn vị cùng ngành”, đề nghị gửi 2–3 ví dụ video khi khách muốn.
+3. Chỉ tiếng Việt.
 
-## Kế hoạch (Claude điền sau khi duyệt)
-- **Tệp sửa:** …
-- **Thứ tự làm:** …
-- **Kiểm tra:** test SQL / deno / build web / thử giao diện.
+## Kế hoạch
+- **Tệp sửa:** migration `20261109000200_email_only.sql` (lịch v5, mẫu v6, sao lưu, `deal_board.outreach_emails`, `replan_email_only()` chuyển khách đang dở lịch cũ); `web/src/lib/pipeline.ts` (email kế tiếp theo số email đã gửi, câu riêng về khách, gia hạn qua email); khung khách (tiêu đề Re:, nhắc trả lời cùng luồng, cảnh báo chỗ trống), Hôm nay, Pipeline, Kho nội dung, Cài đặt, Kết quả; test SQL cũ về lịch 19 bước.
+- **Thứ tự làm:** migration + test SQL → web → tài liệu.
+- **Kiểm tra:** `scripts/test-db.sh` (có test mới `98_email_only_test.sql`), `npm run build`.

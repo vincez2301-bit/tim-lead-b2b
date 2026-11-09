@@ -11,7 +11,7 @@ import {
   OPEN_STAGES,
   RENEWAL_WINDOW_DAYS,
   STAGE_LABEL,
-  TOUCH_GOAL,
+  progressText,
   addDays,
   dueState,
   fmtDay,
@@ -133,7 +133,7 @@ export function TodayPage() {
       const q = quotes.get(r.id);
       return q && q.valid_until <= addDays(t, QUOTE_EXPIRY_WARN_DAYS);
     })
-    .map((r): Task => ({ ...task(r), title: `Gọi chốt trước khi báo giá hết hạn`, date: t }));
+    .map((r): Task => ({ ...task(r), title: `Email chốt trước khi báo giá hết hạn`, date: t }));
   const due = [...dueRows.map((r) => task(r)), ...expiring].sort(hotFirst);
   // Lead mới: mỗi ngày gửi email mở lời cho vài lead ưu tiên nhất.
   const allNew = scoped.filter(isNew).sort((a, b) => leadRank(a) - leadRank(b));
@@ -158,7 +158,7 @@ export function TodayPage() {
     .map((r) => task(r, "Đặt lịch"));
   const renewTasks = renewals.map((r) => ({
     row: r,
-    title: `Gọi chốt gia hạn${r.est_arr_usd ? ` · ARR ${fmtUsd(r.est_arr_usd)}` : ""}`,
+    title: `Email chốt gia hạn${r.est_arr_usd ? ` · ARR ${fmtUsd(r.est_arr_usd)}` : ""}`,
     date: r.renewal_at,
     action: "Mở",
     extra: "hết hạn hợp đồng",
@@ -184,7 +184,7 @@ export function TodayPage() {
     <section>
       <PageHeader
         title="Hôm nay"
-        description="Những việc nên làm hôm nay. Bấm “Bắt đầu”: app mở lần lượt từng khách với email / Zalo / kịch bản gọi soạn sẵn, gửi xong bấm “Đã gửi” là sang khách kế tiếp."
+        description="Những việc nên làm hôm nay. Bấm “Bắt đầu”: app mở lần lượt từng khách với email soạn sẵn, gửi xong bấm “Đã gửi” là sang khách kế tiếp."
         actions={
           <label className="checkbox inline">
             <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
@@ -254,6 +254,7 @@ export function TodayPage() {
           </div>
 
           <TaskList
+            cadence={cadence}
             title="Việc hôm nay"
             empty="Không còn việc nào hôm nay. Làm tốt lắm!"
             tasks={todayTasks}
@@ -262,6 +263,7 @@ export function TodayPage() {
           />
           {hotWaiting.length > 0 && (
             <TaskList
+            cadence={cadence}
               title="Khách đang chốt — chưa tới hạn"
               hint="Khách đã trả lời, đang đi tới ký. Có tin mới thì mở ngay; báo giá sắp hết hạn sẽ tự lên Việc hôm nay."
               empty=""
@@ -270,14 +272,15 @@ export function TodayPage() {
             />
           )}
           {renewTasks.length > 0 && (
-            <TaskList title={`Sắp gia hạn hợp đồng (${RENEWAL_WINDOW_DAYS} ngày tới)`} empty="" tasks={renewTasks} onOpen={(id) => open(id, "touches")} />
+            <TaskList cadence={cadence} title={`Sắp gia hạn hợp đồng (${RENEWAL_WINDOW_DAYS} ngày tới)`} empty="" tasks={renewTasks} onOpen={(id) => open(id, "touches")} />
           )}
           {noPlan.length > 0 && (
-            <TaskList title="Chưa đặt việc tiếp theo" empty="" tasks={noPlan} onOpen={(id) => open(id, "touches")} />
+            <TaskList cadence={cadence} title="Chưa đặt việc tiếp theo" empty="" tasks={noPlan} onOpen={(id) => open(id, "touches")} />
           )}
-          <TaskList title="3 ngày tới" empty="Chưa có lịch trong 3 ngày tới." tasks={soon} onOpen={(id) => open(id, "touches")} />
+          <TaskList cadence={cadence} title="3 ngày tới" empty="Chưa có lịch trong 3 ngày tới." tasks={soon} onOpen={(id) => open(id, "touches")} />
           {waitingNew.length > 0 && (
             <TaskList
+            cadence={cadence}
               title="Lead mới đang chờ tới lượt"
               hint="Xếp theo hạng A/B/C rồi nhóm khách (đài → MCN → production house → hãng phim → nhãn hàng). Muốn gửi thêm hôm nay thì bấm Gửi email."
               empty=""
@@ -339,6 +342,7 @@ export function TodayPage() {
 }
 
 function TaskList({
+  cadence,
   title,
   hint,
   empty,
@@ -348,6 +352,7 @@ function TaskList({
   onOpen,
   onDisqualify,
 }: {
+  cadence: ReturnType<typeof getCadence>;
   title: string;
   hint?: string;
   empty: string;
@@ -380,7 +385,7 @@ function TaskList({
                   </span>
                   <span className="small muted">
                     {r.segment ? SEGMENT_LABEL[r.segment] : "Chưa phân nhóm"}
-                    {r.city ? ` · ${r.city}` : ""} · {STAGE_LABEL[r.stage]} · {r.touches}/{TOUCH_GOAL} điểm chạm
+                    {r.city ? ` · ${r.city}` : ""} · {STAGE_LABEL[r.stage]} · {progressText(r, cadence)}
                     {r.stage === "nurture" && r.lost_reason_code ? ` · từ chối vì ${LOST_REASON_LABEL[r.lost_reason_code].toLowerCase()}` : ""}
                   </span>
                 </span>

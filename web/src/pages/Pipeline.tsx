@@ -10,7 +10,8 @@ import {
   CLOSED_STAGES,
   OPEN_STAGES,
   STAGE_LABEL,
-  TOUCH_GOAL,
+  outreachSteps,
+  progressText,
   dueState,
   fmtDay,
   fmtUsd,
@@ -254,7 +255,7 @@ export function PipelinePage() {
                 </div>
                 <div className="column-body">
                   {list.map((r) => (
-                    <DealCard key={r.id} r={r} owner={memberName(members, r.owner_id)} onOpen={() => open(r.id)} />
+                    <DealCard key={r.id} r={r} owner={memberName(members, r.owner_id)} goal={outreachSteps(cadence).length} onOpen={() => open(r.id)} />
                   ))}
                   {list.length === 0 && <p className="small muted column-empty">Kéo thẻ vào đây</p>}
                 </div>
@@ -279,9 +280,10 @@ export function PipelinePage() {
   );
 }
 
-function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () => void }) {
+function DealCard({ r, owner, goal, onOpen }: { r: DealRow; owner: string; goal: number; onOpen: () => void }) {
   const due = dueState(r.next_action_at);
-  const pct = Math.min(100, Math.round((100 * r.touches) / TOUCH_GOAL));
+  const outreach = r.stage === "new" || r.stage === "research" || r.stage === "outreach";
+  const pct = outreach ? Math.min(100, Math.round((100 * (r.outreach_emails ?? 0)) / Math.max(1, goal))) : 100;
   const stale = staleDays(r);
   return (
     <button
@@ -327,11 +329,11 @@ function DealCard({ r, owner, onOpen }: { r: DealRow; owner: string; onOpen: () 
         </div>
       )}
       <div className="deal-foot">
-        <span className="touch" title={`${r.touches}/${TOUCH_GOAL} điểm chạm`}>
+        <span className="touch" title={outreach ? `${r.outreach_emails ?? 0}/${goal} email` : `${r.touches} điểm chạm`}>
           <span className="bar">
             <span style={{ width: `${pct}%` }} />
           </span>
-          {r.touches}/{TOUCH_GOAL}
+          {outreach ? `${r.outreach_emails ?? 0}/${goal}` : r.touches}
         </span>
         <span className="small muted">{r.est_arr_usd ? fmtUsd(r.est_arr_usd) : owner}</span>
       </div>
@@ -399,15 +401,13 @@ function NextList({
                 </td>
                 <td>
                   <Badge tone={PHASE_TONE[ph]}>{PHASE_LABEL[ph]}</Badge>
-                  <div className="small muted">
-                    {r.touches}/{TOUCH_GOAL} điểm chạm
-                  </div>
+                  <div className="small muted">{progressText(r, cadence)}</div>
                 </td>
                 <td>
                   <strong className="next-title">{m.title}</strong>
                   <div className="small muted">
                     {m.channel ? CHANNEL_LABEL[m.channel] : ""}
-                    {m.step ? ` · bước ${m.step}/${TOUCH_GOAL}` : ""}
+                    {m.step ? ` · bước ${m.step}` : ""}
                   </div>
                 </td>
                 <td className="small">
