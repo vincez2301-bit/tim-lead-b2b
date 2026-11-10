@@ -26,24 +26,42 @@ const STAT_LABEL: Record<string, string> = {
   skipped_invalid: "Bỏ qua (thiếu tên)",
 };
 
-/** Danh sách tên dán vào (mỗi dòng một công ty; dán từ Excel thì lấy ô đầu tiên không phải ID / link kênh). */
-export function parseNameList(text: string): string[] {
+/** Một dòng trong danh sách dán vào: tên công ty, hoặc website (khi dán link / tên miền thì app so trùng theo tên miền). */
+export interface PasteEntry {
+  name: string;
+  domain?: string;
+  website_url?: string;
+}
+const SITE_RE = /^(?:https?:\/\/)?(?:www\.)?((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})(?::\d+)?(?:[/?#]\S*)?$/i;
+const SOCIAL_RE = /(^|\.)(youtube\.com|youtu\.be|facebook\.com|fb\.com|tiktok\.com|instagram\.com|linkedin\.com|zalo\.me)$/i;
+
+/**
+ * Danh sách dán vào: mỗi dòng một công ty (dán từ Excel thì lấy ô đầu tiên không phải ID / link kênh).
+ * Dòng có website (https://… hoặc tenmien.vn) thì giữ tên miền để app nhận ra công ty đã có.
+ */
+export function parseNameList(text: string): PasteEntry[] {
   const seen = new Set<string>();
-  const out: string[] = [];
+  const out: PasteEntry[] = [];
   for (const line of text.split(/\r?\n/)) {
-    const cell = line
+    const cells = line
       .split("\t")
       .map((c) => c.trim())
-      .find((c) => c && !/^UC[\w-]{20,}$/.test(c) && !/^https?:\/\//i.test(c));
-    const name = (cell ?? "")
+      .filter(Boolean);
+    const siteCell = cells.find((c) => {
+      const m = SITE_RE.exec(c);
+      return m && !SOCIAL_RE.test(m[1]);
+    });
+    const domain = siteCell ? SITE_RE.exec(siteCell)![1].toLowerCase() : undefined;
+    const cell = cells.find((c) => c !== siteCell && !/^UC[\w-]{20,}$/.test(c) && !/^https?:\/\//i.test(c) && !SITE_RE.test(c));
+    const name = ((cell ?? "")
       .replace(/^(\d{1,3}[.)]|[-•*])\s+/, "")
       .replace(/\s+-\s+YouTube$/i, "")
-      .trim()
+      .trim() || domain || "")
       .slice(0, 300);
-    const key = name.toLowerCase();
+    const key = domain ?? name.toLowerCase();
     if (name && !seen.has(key)) {
       seen.add(key);
-      out.push(name);
+      out.push(domain ? { name, domain, website_url: `${/^http:\/\//i.test(siteCell!) ? "http" : "https"}://${domain}/` } : { name });
     }
   }
   return out;
@@ -204,18 +222,18 @@ export function ImportPage() {
       />
       {!isAdmin && <Notice kind="info">Chỉ admin được nhập dữ liệu.</Notice>}
       <div className="card">
-        <h2>Dán danh sách tên công ty</h2>
+        <h2>Dán danh sách tên công ty hoặc website</h2>
         <p className="muted small">
-          Mỗi dòng một công ty (dán thẳng từ Excel cũng được). App đưa các công ty vào Pipeline, rồi tự tìm website trên Google, đọc
-          website lấy email, số điện thoại, người phụ trách và tìm kênh YouTube.
+          Mỗi dòng một công ty: tên hoặc website (dán thẳng từ Excel cũng được). Dán website thì app so theo tên miền và báo nếu công ty
+          đã có. App đưa các công ty vào Pipeline, rồi tự tìm website, đọc website lấy email, người phụ trách và tìm kênh YouTube.
         </p>
         <textarea
           rows={6}
           value={pasteText}
           disabled={!isAdmin || busy}
           onChange={(e) => setPasteText(e.target.value)}
-          placeholder={"Yeah1\nCông ty TNHH Truyền thông Sóng Việt\nFapTV"}
-          aria-label="Danh sách tên công ty"
+          placeholder={"Yeah1\nCông ty TNHH Truyền thông Sóng Việt\nhttps://tencongty.vn"}
+          aria-label="Danh sách tên công ty hoặc website"
         />
         <div className="form-grid">
           <label>
@@ -245,8 +263,8 @@ export function ImportPage() {
             disabled={!isAdmin || busy || !pasteNames.length}
             onClick={() =>
               void run(
-                pasteNames.map((name) => ({
-                  name,
+                pasteNames.map((e) => ({
+                  ...e,
                   ...(pasteSegment ? { segment: pasteSegment } : {}),
                   source: pasteSource.trim() || "Danh sách dán tay",
                 })) as ImportRow[],
@@ -258,7 +276,7 @@ export function ImportPage() {
           </button>
           {pasteNames.length > 0 && (
             <span className="small muted">
-              {pasteNames.slice(0, 4).join(" · ")}
+              {pasteNames.slice(0, 4).map((e) => e.name).join(" · ")}
               {pasteNames.length > 4 ? ` · … (+${pasteNames.length - 4})` : ""}
             </span>
           )}
