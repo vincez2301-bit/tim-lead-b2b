@@ -588,8 +588,53 @@ export function personalLine(company: string, yt: YtFacts | null): string {
   return `[Một câu riêng về ${company}: dự án hoặc video gần đây anh/chị đã xem]`;
 }
 
+/** Dữ liệu kênh YouTube app đã thu thập cho công ty (dùng cho câu riêng về khách); null nếu chưa có. */
+export async function loadYtFacts(companyId: string): Promise<YtFacts | null> {
+  const o = await supabase
+    .from("observations")
+    .select("signal_code,value_num,value_text")
+    .eq("company_id", companyId)
+    .in("signal_code", ["YT_SUBSCRIBERS", "YT_UPLOAD_FREQ", "MULTI_CHANNEL_OWNER"])
+    .order("observed_at", { ascending: false })
+    .limit(15);
+  const latest = (code: string) => (o.data ?? []).find((x) => x.signal_code === code) as
+    | { value_num: number | null; value_text: string | null }
+    | undefined;
+  const subs = latest("YT_SUBSCRIBERS");
+  const multi = latest("MULTI_CHANNEL_OWNER")?.value_text?.split("\n")[0]?.replace(/\s*\(https?:[^)]*\)\s*$/, "") ?? null;
+  const channel = subs?.value_text && subs.value_text !== "Kênh ẩn số subscriber" ? subs.value_text : multi;
+  return channel ? { channel, subscribers: subs?.value_num ?? null, videos90d: latest("YT_UPLOAD_FREQ")?.value_num ?? null } : null;
+}
+
 export function renderTemplate(text: string, vars: Record<string, string>): string {
   return text.replace(/\{([a-z_]+)\}/g, (m, k: string) => (k in vars ? vars[k] : m));
+}
+
+/** Biến điền vào email mẫu cho một khách — dùng chung cho khung soạn email và trang Kho nội dung (xem trước). */
+export function templateVars(o: {
+  company: string;
+  segment: Segment | null;
+  contactName: string | null;
+  sender: Sender;
+  playlists: Playlist[];
+  personal: string;
+  /** Tiêu đề (chưa điền) của email mở lời: email theo dõi dùng “Re: …” cho cùng luồng. */
+  firstSubject?: string | null;
+}): Record<string, string> {
+  const pl = o.playlists.find((p) => !p.segments?.length || (o.segment && p.segments.includes(o.segment)));
+  const vars: Record<string, string> = {
+    ...addressFor(o.contactName, o.company),
+    cong_ty: o.company,
+    playlist: pl ? pl.url : "[link playlist — thêm ở trang Nhạc mẫu]",
+    nguoi_gui: o.sender.name || "[Tên bạn]",
+    chuc_danh: o.sender.title,
+    cong_ty_ban: o.sender.company || "Epidemic Sound tại Việt Nam",
+    sdt: o.sender.phone,
+    chu_ky: signature(o.sender),
+    cau_rieng: o.personal,
+  };
+  vars.tieu_de_dau = o.firstSubject ? renderTemplate(o.firstSubject, vars) : `Epidemic Sound và ${o.company}`;
+  return vars;
 }
 
 /** Thêm công ty vào pipeline bán hàng (giai đoạn Lead mới); bỏ qua công ty đã có deal. */

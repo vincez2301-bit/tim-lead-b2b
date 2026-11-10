@@ -24,9 +24,13 @@ import {
   getCadence,
   getPlaybook,
   getSender,
+  getPlaylists,
   getTemplates,
+  loadYtFacts,
+  personalLine,
+  pickTemplate,
   renderTemplate,
-  signature,
+  templateVars,
   type Channel,
   type DealRow,
   type LostReason,
@@ -35,6 +39,7 @@ import {
 } from "../lib/pipeline";
 import { Badge, CopyButton, EmptyState, Notice, PageHeader, Spinner, TableWrap } from "../components/ui";
 import { DealPanel } from "../components/DealPanel";
+import { canEmail, getContactRoles, rankContacts, type RankableContact } from "../lib/contacts";
 import { confirmDialog } from "../components/dialog";
 
 const VARS: [string, string][] = [
@@ -51,6 +56,13 @@ const VARS: [string, string][] = [
   ["{sdt}", "số điện thoại"],
   ["{chu_ky}", "chữ ký đầy đủ"],
 ];
+interface PreviewLead {
+  id: string;
+  company_id: string;
+  company_name: string;
+  segment: Segment | null;
+}
+
 const MSG_CHANNELS: Channel[] = ["email", "zalo", "call", "linkedin", "meeting"];
 const NURTURE_STEP = 90;
 
@@ -84,19 +96,56 @@ export function EmailLibraryPage() {
   const [draft, setDraft] = useState<MessageTemplate | null>(null);
   const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
-  const sample: Record<string, string> = {
-    ten: "Minh",
-    anh_chi: "anh",
-    xung_ho: "anh Minh",
-    cong_ty: segment === "mcn" ? "Yeah1 Network" : segment === "brand" ? "Vinamilk" : "HTV9",
-    playlist: "https://www.epidemicsound.com/playlists/…",
-    nguoi_gui: sender.name || "[Tên bạn]",
-    chuc_danh: sender.title,
-    cong_ty_ban: sender.company,
-    sdt: sender.phone || "[số điện thoại]",
-    chu_ky: signature(sender),
+  // Xem trước với một khách thật trong pipeline (đúng nhóm khách đang lọc): tên công ty, người nhận, câu riêng, playlist.
+  const playlists = useMemo(() => getPlaylists(settings), [settings]);
+  const roles = useMemo(() => getContactRoles(settings), [settings]);
+  const [leads, setLeads] = useState<PreviewLead[]>([]);
+  const [leadId, setLeadId] = useState("");
+  const [leadCtx, setLeadCtx] = useState<{ id: string; contactName: string | null; personal: string } | null>(null);
+  useEffect(() => {
+    void supabase
+      .from("deal_board")
+      .select("id,company_id,company_name,segment")
+      .not("stage", "in", "(won,lost)")
+      .order("company_name")
+      .limit(500)
+      .then(({ data }) => setLeads((data ?? []) as PreviewLead[]));
+  }, []);
+  const leadOptions = useMemo(() => leads.filter((l) => !segment || l.segment === segment), [leads, segment]);
+  const lead = leadOptions.find((l) => l.id === leadId) ?? leadOptions[0] ?? null;
+  useEffect(() => {
+    if (!lead) return;
+    let live = true;
+    void (async () => {
+      const [c, yt] = await Promise.all([
+        supabase.from("contacts").select("full_name,job_title,email,email_label,source").eq("company_id", lead.company_id),
+        loadYtFacts(lead.company_id),
+      ]);
+      if (!live) return;
+      const { shown } = rankContacts((c.data ?? []) as RankableContact[], lead.segment, roles);
+      const best = shown.find(canEmail) ?? shown[0];
+      setLeadCtx({ id: lead.id, contactName: best?.full_name ?? null, personal: personalLine(lead.company_name, yt) });
+    })();
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead?.id, roles]);
+  const ctx = lead && leadCtx?.id === lead.id ? leadCtx : null;
+  const varsFor = (t: MessageTemplate) => {
+    const company = lead?.company_name ?? "[Tên công ty]";
+    const seg = lead?.segment ?? (t.segment === "all" ? null : t.segment);
+    return templateVars({
+      company,
+      segment: seg,
+      contactName: ctx?.contactName ?? null,
+      sender,
+      playlists,
+      personal: ctx?.personal ?? personalLine(company, null),
+      firstSubject: pickTemplate(templates, 1, t.segment === "all" ? seg : t.segment)?.subject,
+    });
   };
-  const show = (t: string) => (preview ? renderTemplate(t, sample) : t);
+  const show = (text: string, t: MessageTemplate) => (preview ? renderTemplate(text, varsFor(t)) : text);
 
   // Gom mẫu theo bước của lịch tiếp cận (bước 90 = nuôi dưỡng sau khi từ chối).
   const groups = useMemo(() => {
@@ -206,10 +255,26 @@ export function EmailLibraryPage() {
               </button>
             ))}
           </div>
-          <label className="checkbox inline">
-            <input type="checkbox" checked={preview} onChange={(e) => setPreview(e.target.checked)} />
-            Xem trước với ví dụ
-          </label>
+          <div className="row">
+            <label className="checkbox inline">
+              <input type="checkbox" checked={preview} onChange={(e) => setPreview(e.target.checked)} />
+              Xem trước với khách
+            </label>
+            {preview &&
+              (leadOptions.length ? (
+                <select aria-label="Khách để xem trước" value={lead?.id ?? ""} onChange={(e) => setLeadId(e.target.value)}>
+                  {leadOptions.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.company_name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="small muted">
+                  Chưa có khách{segment ? ` nhóm ${SEGMENT_LABEL[segment]}` : ""} trong pipeline — chỗ trống [ … ] là phần app sẽ điền
+                </span>
+              ))}
+          </div>
         </div>
         <details className="vars">
           <summary className="small">Các biến app tự điền</summary>
@@ -255,7 +320,7 @@ export function EmailLibraryPage() {
                           <strong>{t.title}</strong>
                         </div>
                         <div className="row nowrap">
-                          <CopyButton text={(t.subject ? `${show(t.subject)}\n\n` : "") + show(t.body)} />
+                          <CopyButton text={(t.subject ? `${show(t.subject, t)}\n\n` : "") + show(t.body, t)} />
                           {isAdmin && (
                             <>
                               <button type="button" className="btn-link small" onClick={() => startEdit(i)}>
@@ -278,11 +343,11 @@ export function EmailLibraryPage() {
                       </header>
                       {t.subject && (
                         <p className="subject">
-                          <span className="muted">Tiêu đề:</span> {show(t.subject)}
+                          <span className="muted">Tiêu đề:</span> {show(t.subject, t)}
                         </p>
                       )}
                       <div className={expanded.has(i) || t.body.length < 320 ? "template-body pre-wrap" : "template-body pre-wrap clamp"}>
-                        {show(t.body)}
+                        {show(t.body, t)}
                       </div>
                       {t.body.length >= 320 && (
                         <button

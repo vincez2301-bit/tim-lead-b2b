@@ -11,7 +11,6 @@ import type { ContactSource } from "../lib/db-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg, fmtDate } from "../lib/format";
 import {
   BILLING_LABEL,
-  addressFor,
   REASON_TOPICS,
   foldVi,
   objectionTopic,
@@ -27,7 +26,6 @@ import {
   getTemplates,
   pickTemplate,
   renderTemplate,
-  signature,
   type MessageTemplate,
   type Sender,
   reengageDate,
@@ -50,6 +48,8 @@ import {
   outreachSent,
   outreachSteps,
   personalLine,
+  loadYtFacts,
+  templateVars,
   type YtFacts,
   addDays,
   dueDateFor,
@@ -156,20 +156,7 @@ export function DealPanel({
     setActs((a.data ?? []) as Activity[]);
     setContacts((c.data ?? []) as ContactRow[]);
     // Dữ liệu cho câu riêng về khách trong email mở lời (kênh YouTube app đã thu thập).
-    const o = await supabase
-      .from("observations")
-      .select("signal_code,value_num,value_text")
-      .eq("company_id", row.company_id)
-      .in("signal_code", ["YT_SUBSCRIBERS", "YT_UPLOAD_FREQ", "MULTI_CHANNEL_OWNER"])
-      .order("observed_at", { ascending: false })
-      .limit(15);
-    const latest = (code: string) => (o.data ?? []).find((x) => x.signal_code === code) as
-      | { value_num: number | null; value_text: string | null }
-      | undefined;
-    const subs = latest("YT_SUBSCRIBERS");
-    const multi = latest("MULTI_CHANNEL_OWNER")?.value_text?.split("\n")[0]?.replace(/\s*\(https?:[^)]*\)\s*$/, "") ?? null;
-    const channel = subs?.value_text && subs.value_text !== "Kênh ẩn số subscriber" ? subs.value_text : multi;
-    setYt(channel ? { channel, subscribers: subs?.value_num ?? null, videos90d: latest("YT_UPLOAD_FREQ")?.value_num ?? null } : null);
+    setYt(await loadYtFacts(row.company_id));
   }, [dealId]);
 
   // Người đúng vai trò có email lên đầu; email tuyển dụng / CSKH bị ẩn (không bao giờ là người nhận).
@@ -1359,20 +1346,15 @@ function Compose({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts]);
   const contact = contacts.find((c) => c.id === contactId) ?? null;
-  const pl = playlists.find((p) => !p.segments?.length || (deal.segment && p.segments.includes(deal.segment)));
-  const addr = addressFor(contact?.full_name ?? null, deal.company_name);
-  const vars: Record<string, string> = {
-    ...addr,
-    cong_ty: deal.company_name,
-    playlist: pl ? pl.url : "[link playlist — thêm ở trang Nhạc mẫu]",
-    nguoi_gui: sender.name || "[Tên bạn]",
-    chuc_danh: sender.title,
-    cong_ty_ban: sender.company || "Epidemic Sound tại Việt Nam",
-    sdt: sender.phone,
-    chu_ky: signature(sender),
-    cau_rieng: personal,
-  };
-  vars.tieu_de_dau = firstTemplate?.subject ? renderTemplate(firstTemplate.subject, vars) : `Epidemic Sound và ${deal.company_name}`;
+  const vars = templateVars({
+    company: deal.company_name,
+    segment: deal.segment,
+    contactName: contact?.full_name ?? null,
+    sender,
+    playlists,
+    personal,
+    firstSubject: firstTemplate?.subject,
+  });
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [copied, setCopied] = useState(false);
@@ -1380,7 +1362,7 @@ function Compose({
     setSubject(template?.subject ? renderTemplate(template.subject, vars) : "");
     setBody(template ? renderTemplate(template.body, vars) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template, contactId, pl?.url, sender.name, personal]);
+  }, [template, contactId, vars.playlist, sender.name, personal]);
 
   if (!template) {
     return (
