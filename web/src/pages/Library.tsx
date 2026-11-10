@@ -219,13 +219,13 @@ export function EmailLibraryPage() {
         }
       />
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
-      {isAdmin && !getTemplates(settings).some((t) => (t as MessageTemplate & { version?: number }).version === 7) && (
+      {isAdmin && !getTemplates(settings).some((t) => (t as MessageTemplate & { version?: number }).version === 8) && (
         <div className="card start-session">
           <div>
-            <strong>{draft7 ? "Đang xem trước bộ email mẫu mới (v7) — chưa áp dụng" : "Có bộ email mẫu mới (v7)"}</strong>
+            <strong>{draft7 ? "Đang xem trước bộ email mẫu mới (v8) — chưa áp dụng" : "Có bộ email mẫu mới (v8)"}</strong>
             <div className="small muted">
-              Mỗi email một thông tin mới có số liệu (kho nhạc, danh sách an toàn chống claim, pháp lý, chi phí) và một việc dễ làm
-              cho khách; email mở lời có P.S. thử nhạc miễn phí. Bộ đang dùng được sao lưu; email đã gửi và lịch hẹn không đổi.
+              Cùng nội dung bộ v7, câu chữ được trau chuốt theo văn phong chuyên nghiệp: câu trọn vẹn, thuật ngữ tiếng Việt kèm
+              tiếng Anh trong ngoặc. Bộ đang dùng được sao lưu; email đã gửi và lịch hẹn không đổi.
             </div>
           </div>
           <div className="row">
@@ -233,7 +233,7 @@ export function EmailLibraryPage() {
               type="button"
               onClick={async () => {
                 if (draft7) return setDraft7(null);
-                const [t, c] = await Promise.all([supabase.rpc("default_message_templates_v7"), supabase.rpc("default_cadence_v6")]);
+                const [t, c] = await Promise.all([supabase.rpc("default_message_templates_v8"), supabase.rpc("default_cadence_v6")]);
                 if (t.error || c.error) setMsg({ kind: "error", text: (t.error ?? c.error)!.message });
                 else setDraft7({ templates: getTemplates({ message_templates: t.data }), cadence: getCadence({ cadence: c.data }) });
               }}
@@ -244,17 +244,17 @@ export function EmailLibraryPage() {
               type="button"
               className="btn-primary"
               onClick={async () => {
-                if (!(await confirmDialog({ title: "Dùng bộ email mẫu mới (v7)?", message: "Toàn bộ email mẫu được thay; bộ đang dùng được sao lưu.", confirmLabel: "Dùng bộ mới" }))) return;
+                if (!(await confirmDialog({ title: "Dùng bộ email mẫu mới (v8)?", message: "Toàn bộ email mẫu được thay; bộ đang dùng được sao lưu.", confirmLabel: "Dùng bộ mới" }))) return;
                 const { error } = await supabase.rpc("apply_sales_defaults");
                 if (error) setMsg({ kind: "error", text: error.message });
                 else {
                   setDraft7(null);
                   await reload();
-                  setMsg({ kind: "ok", text: "Đã dùng bộ email mẫu mới (v7)." });
+                  setMsg({ kind: "ok", text: "Đã dùng bộ email mẫu mới (v8)." });
                 }
               }}
             >
-              Dùng bộ mới (v7)
+              Dùng bộ mới (v8)
             </button>
           </div>
         </div>

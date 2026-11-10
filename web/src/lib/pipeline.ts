@@ -581,17 +581,23 @@ export interface YtFacts {
 }
 /** Câu riêng về khách cho email mở lời ({cau_rieng}); thiếu dữ liệu thì để chỗ trống đánh dấu để tự viết. */
 export function personalLine(company: string, yt: YtFacts | null): string {
+  const name = shortCompanyName(company);
   if (yt?.channel) {
     const vids = yt.videos90d ? `${yt.videos90d} video trong 3 tháng gần đây` : null;
     const subs = yt.subscribers ? `${yt.subscribers.toLocaleString("vi-VN")} người đăng ký` : null;
     const facts = [vids, subs].filter(Boolean).join(", ");
-    const busy = (yt.videos90d ?? 0) >= 6 ? " — với nhịp đăng đều như vậy, chọn nhạc nền chắc chiếm không ít thời gian của đội sản xuất." : ".";
-    return `Em có xem kênh YouTube ${yt.channel} của ${company}${facts ? ` (${facts})` : ""}${busy}`;
+    const seen = `Em có dịp xem qua kênh YouTube ${yt.channel} của ${name}${facts ? ` (${facts})` : ""}.`;
+    return (yt.videos90d ?? 0) >= 6
+      ? `${seen} Với tần suất đăng tải đều đặn như vậy, việc tìm nhạc nền vừa phù hợp vừa an toàn bản quyền hẳn chiếm không ít thời gian của đội ngũ sản xuất.`
+      : seen;
   }
-  if (yt?.site === "tvc") return `Em có xem phần dự án TVC trên website của ${company}.`;
-  if (yt?.site === "showreel") return `Em có xem showreel trên website của ${company}.`;
-  if (yt?.site === "hiring") return `Em thấy ${company} đang tuyển vị trí làm video, chắc thời gian tới lượng video sẽ còn tăng.`;
-  return `[Một câu riêng về ${company}: dự án hoặc video gần đây anh/chị đã xem]`;
+  if (yt?.site === "tvc")
+    return `Em có dịp xem qua các dự án TVC trên website của ${name}. Với những sản phẩm làm cho thương hiệu, nguồn nhạc rõ ràng về bản quyền là yếu tố rất quan trọng khi khách hàng đăng tải.`;
+  if (yt?.site === "showreel")
+    return `Em có dịp xem showreel trên website của ${name}; với những sản phẩm như vậy, âm nhạc góp phần rất lớn vào ấn tượng của người xem.`;
+  if (yt?.site === "hiring")
+    return `Em được biết ${name} đang tuyển dụng vị trí sản xuất video, có lẽ khối lượng nội dung của ${name} sẽ còn tăng trong thời gian tới.`;
+  return `[Một câu riêng về ${name}: dự án hoặc video gần đây anh/chị đã xem]`;
 }
 
 /** Dữ liệu cho câu riêng về khách: kênh YouTube app đã thu thập, nếu không có thì dấu hiệu chắc chắn trên website. */

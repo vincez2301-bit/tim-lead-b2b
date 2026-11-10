@@ -96,3 +96,6 @@ Không có dữ liệu nào thì vẫn để chỗ trống đánh dấu như hi�
 ## Kế hoạch
 - **Tệp sửa:** migration `20261110000100_templates_v7.sql` (sinh từ script, mẫu chặng chốt lấy lại từ v6); `web/src/lib/pipeline.ts` (`templateVars`, `loadPersonalFacts`, câu riêng từ website); Kho nội dung (xem trước với khách thật, xem trước bộ mới, nút Dùng bộ mới v7); test `99_templates_v7_test.sql`; README.
 - **Kiểm tra:** `scripts/test-db.sh` (có test mới), `npm run build`.
+
+## Sau khi xong
+- **v8 (2026-11-10):** cùng nội dung v7, trau chuốt câu chữ theo góp ý “còn vụng về”: câu trọn vẹn thay câu cụt, thuật ngữ tiếng Việt kèm tiếng Anh trong ngoặc ở lần đầu (khiếu nại bản quyền – claim, danh sách được cấp phép – safelist, bản tách lớp – stems), chặng chốt và nuôi dưỡng cũng viết lại; câu riêng về khách viết lại. Migration `20261110000200_templates_v8.sql`: bộ đang dùng còn nguyên v7 thì tự thay (sao lưu `message_templates_backup_v7`), đã sửa thì chờ nút “Dùng bộ mới (v8)”.

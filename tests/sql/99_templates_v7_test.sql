@@ -1,4 +1,4 @@
--- Test: bộ email mẫu v7 + lịch v6 (spec 004); chỉ áp dụng khi admin bấm “Dùng bộ mới”, có sao lưu, đổi tên việc đang hẹn.
+-- Test: bộ email mẫu v7 + lịch v6 (spec 004); nút “Dùng bộ mới” (nay áp dụng v8), có sao lưu, đổi tên việc đang hẹn.
 \set QUIET on
 \o /dev/null
 begin;
@@ -61,13 +61,14 @@ do $$ begin
   end;
 end $$;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000007a1","role":"authenticated"}', true);
-select pg_temp.ok(jsonb_array_length(public.default_message_templates_v7()) = 38, 'người đăng nhập xem trước được bộ mới');
+select pg_temp.ok(jsonb_array_length(public.default_message_templates_v7()) = 38 and jsonb_array_length(public.default_message_templates_v8()) = 38,
+  'người đăng nhập xem trước được bộ mới');
 select public.apply_sales_defaults();
 select public.apply_sales_defaults(); -- bấm lại không ghi đè bản sao lưu bằng v7
 reset role;
-select pg_temp.ok((select value = public.default_message_templates_v7() from public.settings where key = 'message_templates'), 'đang dùng v7');
+select pg_temp.ok((select value = public.default_message_templates_v8() from public.settings where key = 'message_templates'), 'nút Dùng bộ mới áp dụng bộ mới nhất (v8)');
 select pg_temp.ok((select value = public.default_cadence_v6() from public.settings where key = 'cadence'), 'đang dùng lịch v6');
-select pg_temp.ok((select s.value = b.value from public.settings s, before_tpl b where s.key = 'message_templates_backup_v6'),
+select pg_temp.ok((select s.value = b.value from public.settings s, before_tpl b where s.key = 'message_templates_backup_v7'),
   'sao lưu đúng bộ trước đó');
 select pg_temp.ok((select next_action = 'Email theo dõi 4: chi phí tính thế nào' from public.deals where id = '00000000-0000-0000-0000-00000000d701'),
   'việc đang hẹn đổi theo tên email mới');
