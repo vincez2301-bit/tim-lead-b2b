@@ -26,7 +26,7 @@ import { useSettings } from "../lib/settings";
 import type { Segment } from "../lib/api-types";
 import { SEGMENTS, SEGMENT_LABEL, errMsg } from "../lib/format";
 import { getPlaylists, type Playlist } from "../lib/pipeline";
-import { mmss, toneFor, type Theme, type Track } from "../lib/music";
+import { likeArtists, mmss, toneFor, type Theme, type Track } from "../lib/music";
 import { EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
 import { SafeLink } from "../components/SafeLink";
 import { usePlayer } from "../components/Player";
@@ -123,7 +123,7 @@ export function MusicPage() {
     <section className="music">
       <PageHeader
         title="Nhạc mẫu"
-        description="16 chủ đề × 10 bài lọc sẵn từ Epidemic Sound. Nghe thử, tua đến đoạn muốn nghe, thêm vào playlist trên tài khoản công ty rồi tích “Đã thêm”."
+        description="16 chủ đề × 10 bài Epidemic Sound cùng màu nhạc với các bài hit khách quen tai (Imagine Dragons, Alan Walker, Hans Zimmer, Dua Lipa…), đã có bản quyền. Nghe thử, thêm vào playlist trên tài khoản công ty rồi tích “Đã thêm”."
         actions={
           themes && (
             <div className="music-progress">
@@ -173,6 +173,7 @@ export function MusicPage() {
                 >
                   <Icon className="theme-icon" aria-hidden="true" />
                   <span className="theme-name">{t.title}</span>
+                  {t.like?.length ? <span className="theme-like">Kiểu {likeArtists(t.like)}</span> : null}
                   <span className="theme-meta">
                     {n}/{t.tracks.length} đã thêm{hasLink ? " · có link" : ""}
                   </span>
@@ -250,6 +251,11 @@ function ThemeDetail({
           <span className="hero-kicker">{theme.segments.map((s) => SEGMENT_LABEL[s]).join(" · ")}</span>
           <h2>{theme.title}</h2>
           {theme.description && <p>{theme.description}</p>}
+          {theme.like?.length ? (
+            <p className="hero-like">
+              Cùng màu nhạc với: <strong>{theme.like.join(" · ")}</strong>
+            </p>
+          ) : null}
           <div className="row">
             <button
               type="button"

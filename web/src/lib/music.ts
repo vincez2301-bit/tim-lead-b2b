@@ -19,6 +19,8 @@ export interface Theme {
   segments: Segment[];
   description?: string;
   official?: { title: string; url: string };
+  /** Bài hit dùng làm mẫu: các bài trong chủ đề được Epidemic Sound gợi ý là cùng màu nhạc. */
+  like?: string[];
   tracks: Track[];
 }
 
@@ -39,4 +41,12 @@ export function toneFor(key: string): string {
 export function mmss(s: number): string {
   if (!Number.isFinite(s) || s < 0) return "0:00";
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+/** “Kiểu Imagine Dragons, Kordhell” — tên nghệ sĩ của các bài hit dùng làm mẫu. */
+export function likeArtists(like: string[] | undefined): string {
+  return (like ?? [])
+    .map((l) => (l.split(" — ")[1] ?? "").replace(/\s*\(.*\)\s*$/, "").trim())
+    .filter(Boolean)
+    .join(", ");
 }
