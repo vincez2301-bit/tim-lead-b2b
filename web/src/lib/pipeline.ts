@@ -618,6 +618,23 @@ export function renderTemplate(text: string, vars: Record<string, string>): stri
   return text.replace(/\{([a-z_]+)\}/g, (m, k: string) => (k in vars ? vars[k] : m));
 }
 
+const LEGAL_PREFIX =
+  /^\s*(công\s*ty|cty|ctcp|tổng\s*công\s*ty)\s*(cổ\s*phần|tnhh|trách\s*nhiệm\s*hữu\s*hạn|cp)?\s*(một\s*thành\s*viên|mtv|hai\s*thành\s*viên(\s*trở\s*lên)?)?\s*/iu;
+const LEGAL_SUFFIX = /[\s,.-]*(co\.?,?\s*ltd\.?|company\s+limited|joint\s+stock\s+company|corporation|corp\.?|jsc|llc|inc\.?|ltd\.?)\s*$/iu;
+/** Tên gọi ngắn cho email: bỏ “Công ty TNHH…”, “… Co., Ltd”; tên viết hoa toàn bộ chuyển về hoa chữ đầu. */
+export function shortCompanyName(name: string): string {
+  let n = name.trim().replace(LEGAL_PREFIX, "").replace(LEGAL_SUFFIX, "").trim();
+  if (n.length < 2) return name.trim();
+  if (/\s/.test(n) && n === n.toLocaleUpperCase("vi") && n !== n.toLocaleLowerCase("vi")) {
+    // Giữ nguyên từ viết tắt ngắn không dấu (ABC, HTV, TV) và từ có số (HTV9).
+    n = n
+      .split(/\s+/)
+      .map((w) => (/\d/.test(w) || /^[A-Z]{1,3}$/.test(w) ? w : w.charAt(0) + w.slice(1).toLocaleLowerCase("vi")))
+      .join(" ");
+  }
+  return n;
+}
+
 /** Biến điền vào email mẫu cho một khách — dùng chung cho khung soạn email và trang Kho nội dung (xem trước). */
 export function templateVars(o: {
   company: string;
@@ -630,9 +647,10 @@ export function templateVars(o: {
   firstSubject?: string | null;
 }): Record<string, string> {
   const pl = o.playlists.find((p) => !p.segments?.length || (o.segment && p.segments.includes(o.segment)));
+  const company = shortCompanyName(o.company);
   const vars: Record<string, string> = {
-    ...addressFor(o.contactName, o.company),
-    cong_ty: o.company,
+    ...addressFor(o.contactName, company),
+    cong_ty: company,
     playlist: pl ? pl.url : "[link playlist — thêm ở trang Nhạc mẫu]",
     nguoi_gui: o.sender.name || "[Tên bạn]",
     chuc_danh: o.sender.title,
@@ -641,8 +659,46 @@ export function templateVars(o: {
     chu_ky: signature(o.sender),
     cau_rieng: o.personal,
   };
-  vars.tieu_de_dau = o.firstSubject ? renderTemplate(o.firstSubject, vars) : `Epidemic Sound và ${o.company}`;
+  vars.tieu_de_dau = o.firstSubject ? renderTemplate(o.firstSubject, vars) : `Epidemic Sound và ${company}`;
   return vars;
+}
+
+/**
+ * Ghi “Đã gửi” email chặng tiếp cận (lead mới hoặc đang tiếp cận) và hẹn email kế tiếp — cùng cách tính với khung khách.
+ * Lead mới: email đầu tiên bắt đầu lịch tiếp cận. Trả về câu báo kết quả.
+ */
+export async function logOutreachEmail(o: {
+  row: Pick<DealRow, "id" | "stage" | "company_name" | "outreach_emails" | "cadence_started_at">;
+  cadence: CadenceStep[];
+  userId: string;
+  contactId: string | null;
+  note: string;
+}): Promise<string> {
+  const { row, cadence } = o;
+  const fresh = row.stage === "new" || row.stage === "research";
+  const sent = row.outreach_emails ?? 0;
+  const cur = nextOutreachStep(cadence, sent);
+  const ins = await supabase.from("activities").insert({
+    deal_id: row.id,
+    user_id: o.userId,
+    channel: "email",
+    outcome: "done",
+    note: o.note,
+    contact_id: o.contactId,
+    step: cur?.step ?? null,
+    happened_at: new Date().toISOString(),
+  });
+  if (ins.error) throw ins.error;
+  const nxt = nextOutreachStep(cadence, sent + 1);
+  let p: Partial<Deal> = nxt
+    ? { next_action: nxt.title, next_action_at: dueDateFor(nxt, fresh ? todayIso() : row.cadence_started_at) }
+    : { next_action: OUTREACH_DONE, next_action_at: addDays(todayIso(), 5) };
+  if (fresh) p = { ...p, stage: "outreach", cadence_started_at: todayIso() };
+  const up = await supabase.from("deals").update(p).eq("id", row.id);
+  if (up.error) throw up.error;
+  return fresh
+    ? `Đã bắt đầu tiếp cận ${row.company_name}. Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`
+    : `${row.company_name}: đã ghi (${sent + 1}/${outreachSteps(cadence).length} email). Việc tiếp theo: ${p.next_action} (${fmtDay(p.next_action_at ?? null)}).`;
 }
 
 /** Thêm công ty vào pipeline bán hàng (giai đoạn Lead mới); bỏ qua công ty đã có deal. */

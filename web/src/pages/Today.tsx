@@ -26,7 +26,8 @@ import {
 import { EmptyState, Notice, PageHeader, Spinner } from "../components/ui";
 import { DealPanel } from "../components/DealPanel";
 import { DisqualifyDialog } from "../components/Disqualify";
-import { Ban } from "lucide-react";
+import { Ban, Mail } from "lucide-react";
+import { QuickEmail, hasQuickEmail } from "../components/QuickEmail";
 import { expiryText, fmtMoney, QUOTE_EXPIRY_WARN_DAYS, type Quote } from "../lib/quotes";
 
 type OpenQuote = Pick<Quote, "deal_id" | "number" | "valid_until" | "total" | "currency">;
@@ -164,6 +165,11 @@ export function TodayPage() {
     extra: "hết hạn hợp đồng",
   }));
 
+  // Gửi từ email gợi ý ngay trên danh sách: báo kết quả rồi tải lại (lead chuyển sang việc kế tiếp).
+  const quickSent = (msg: string) => {
+    setDoneMsg(msg);
+    void load();
+  };
   const open = (id: string, tabName: "qualify" | "touches") =>
     setParams((p) => {
       p.set("deal", id);
@@ -184,7 +190,7 @@ export function TodayPage() {
     <section>
       <PageHeader
         title="Hôm nay"
-        description="Những việc nên làm hôm nay. Bấm “Bắt đầu”: app mở lần lượt từng khách với email soạn sẵn, gửi xong bấm “Đã gửi” là sang khách kế tiếp."
+        description="Những việc nên làm hôm nay. Bấm “Email gợi ý” cạnh từng lead để xem và gửi email soạn sẵn ngay tại đây, hoặc “Bắt đầu” để mở lần lượt từng khách."
         actions={
           <label className="checkbox inline">
             <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
@@ -260,6 +266,7 @@ export function TodayPage() {
             tasks={todayTasks}
             onOpen={(id) => open(id, "touches")}
             onDisqualify={onDisqualify}
+            onQuickSent={quickSent}
           />
           {hotWaiting.length > 0 && (
             <TaskList
@@ -289,6 +296,7 @@ export function TodayPage() {
               onMore={() => setShowAllNew(true)}
               onOpen={(id) => open(id, "touches")}
               onDisqualify={onDisqualify}
+              onQuickSent={quickSent}
             />
           )}
         </>
@@ -351,6 +359,7 @@ function TaskList({
   onMore,
   onOpen,
   onDisqualify,
+  onQuickSent,
 }: {
   cadence: ReturnType<typeof getCadence>;
   title: string;
@@ -362,11 +371,30 @@ function TaskList({
   onOpen: (id: string) => void;
   /** Nút “Không phù hợp” cho lead chưa liên hệ (loại ngay từ đầu, lưu ở trang Công ty). */
   onDisqualify?: (row: DealRow) => void;
+  /** Có thì mỗi lead ở chặng tiếp cận có nút “Email gợi ý” mở email soạn sẵn ngay dưới dòng. */
+  onQuickSent?: (msg: string) => void;
 }) {
+  const [openMail, setOpenMail] = useState<Set<string>>(new Set());
+  const mailable = onQuickSent ? tasks.filter((x) => hasQuickEmail(x.row, cadence)).map((x) => x.row.id) : [];
+  const allOpen = mailable.length > 0 && mailable.every((id) => openMail.has(id));
+  const toggle = (id: string) =>
+    setOpenMail((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   return (
     <div className="card">
-      <h2>
-        {title} <span className="count">{tasks.length + Math.max(0, more)}</span>
+      <h2 className="row space-between">
+        <span>
+          {title} <span className="count">{tasks.length + Math.max(0, more)}</span>
+        </span>
+        {mailable.length > 0 && (
+          <button type="button" className="btn-link small" onClick={() => setOpenMail(allOpen ? new Set() : new Set(mailable))}>
+            <Mail aria-hidden="true" /> {allOpen ? "Ẩn email gợi ý" : `Xem email gợi ý (${mailable.length})`}
+          </button>
+        )}
       </h2>
       {hint && <p className="small muted">{hint}</p>}
       {tasks.length === 0 ? (
@@ -374,7 +402,8 @@ function TaskList({
       ) : (
         <ul className="tasks">
           {tasks.map(({ row: r, title: what, date, action, extra }) => (
-            <li key={r.id} className={onDisqualify && r.touches === 0 ? "task-row" : undefined}>
+            <li key={r.id}>
+              <div className="task-line">
               <button type="button" className="task" onClick={() => onOpen(r.id)}>
                 <span className={`tier tier-${r.tier ?? "none"}`}>{r.tier ?? "?"}</span>
                 <span className="task-main">
@@ -394,6 +423,19 @@ function TaskList({
                   <span className={dueState(date) === "overdue" || dueState(date) === "today" ? "btn btn-primary btn-sm" : "btn btn-sm"}>{action}</span>
                 </span>
               </button>
+              {mailable.includes(r.id) && (
+                <button
+                  type="button"
+                  className={openMail.has(r.id) ? "task-x task-mail on" : "task-x task-mail"}
+                  title="Xem email gợi ý ngay tại đây"
+                  aria-expanded={openMail.has(r.id)}
+                  aria-label={`${r.company_name}: email gợi ý`}
+                  onClick={() => toggle(r.id)}
+                >
+                  <Mail aria-hidden="true" />
+                  <span>Email gợi ý</span>
+                </button>
+              )}
               {onDisqualify && r.touches === 0 && (
                 <button
                   type="button"
@@ -405,6 +447,17 @@ function TaskList({
                   <Ban aria-hidden="true" />
                   <span>Không phù hợp</span>
                 </button>
+              )}
+              </div>
+              {onQuickSent && openMail.has(r.id) && (
+                <QuickEmail
+                  row={r}
+                  onOpen={() => onOpen(r.id)}
+                  onSent={(msg) => {
+                    toggle(r.id);
+                    onQuickSent(msg);
+                  }}
+                />
               )}
             </li>
           ))}
