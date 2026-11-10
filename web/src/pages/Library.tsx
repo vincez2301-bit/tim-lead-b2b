@@ -26,7 +26,7 @@ import {
   getSender,
   getPlaylists,
   getTemplates,
-  loadYtFacts,
+  loadPersonalFacts,
   personalLine,
   pickTemplate,
   renderTemplate,
@@ -85,9 +85,12 @@ function SegChips({ value, onChange, allLabel }: { value: Segment | ""; onChange
 export function EmailLibraryPage() {
   const { isAdmin } = useAuth();
   const { settings, loading, save, reload } = useSettings();
-  const templates = getTemplates(settings);
-  const cadence = getCadence(settings);
+  // Xem trước bộ mới (v7) trước khi áp dụng: chỉ đọc, không sửa được.
+  const [draft7, setDraft7] = useState<{ templates: MessageTemplate[]; cadence: ReturnType<typeof getCadence> } | null>(null);
+  const templates = draft7?.templates ?? getTemplates(settings);
+  const cadence = draft7?.cadence ?? getCadence(settings);
   const sender = getSender(settings);
+  const canEdit = isAdmin && !draft7;
   const [segment, setSegment] = useState<Segment | "">("");
   const [channel, setChannel] = useState<Channel | "">("");
   const [preview, setPreview] = useState(true);
@@ -119,7 +122,7 @@ export function EmailLibraryPage() {
     void (async () => {
       const [c, yt] = await Promise.all([
         supabase.from("contacts").select("full_name,job_title,email,email_label,source").eq("company_id", lead.company_id),
-        loadYtFacts(lead.company_id),
+        loadPersonalFacts(lead.company_id),
       ]);
       if (!live) return;
       const { shown } = rankContacts((c.data ?? []) as RankableContact[], lead.segment, roles);
@@ -208,7 +211,7 @@ export function EmailLibraryPage() {
         title="Email & tin nhắn mẫu"
         description="Nội dung cho từng bước trong lịch tiếp cận (chỉ email). Khi bạn mở một khách ở Hôm nay, app tự chọn đúng mẫu theo bước và nhóm khách, điền tên, công ty, câu riêng về khách ({cau_rieng}), playlist và chữ ký; email theo dõi dùng tiêu đề “Re: {tieu_de_dau}”."
         actions={
-          isAdmin && (
+          canEdit && (
             <button type="button" className="btn-primary" onClick={() => startEdit("new")}>
               <Plus aria-hidden="true" /> Thêm mẫu
             </button>
@@ -216,30 +219,44 @@ export function EmailLibraryPage() {
         }
       />
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
-      {isAdmin && !templates.some((t) => (t as MessageTemplate & { version?: number }).version === 6) && (
+      {isAdmin && !getTemplates(settings).some((t) => (t as MessageTemplate & { version?: number }).version === 7) && (
         <div className="card start-session">
           <div>
-            <strong>Có bộ email mẫu mới (chỉ email)</strong>
+            <strong>{draft7 ? "Đang xem trước bộ email mẫu mới (v7) — chưa áp dụng" : "Có bộ email mẫu mới (v7)"}</strong>
             <div className="small muted">
-              6 email tiếp cận cho từng nhóm khách, mỗi email một lý do để dùng Epidemic Sound; email theo dõi giữ tiêu đề “Re: …”;
-              chặng chốt cũng qua email. Bấm để thay lịch và toàn bộ nội dung soạn sẵn.
+              Mỗi email một thông tin mới có số liệu (kho nhạc, danh sách an toàn chống claim, pháp lý, chi phí) và một việc dễ làm
+              cho khách; email mở lời có P.S. thử nhạc miễn phí. Bộ đang dùng được sao lưu; email đã gửi và lịch hẹn không đổi.
             </div>
           </div>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={async () => {
-              if (!(await confirmDialog({ title: "Thay bằng bộ email mẫu mới?", message: "Lịch tiếp cận và toàn bộ nội dung soạn sẵn sẽ được thay.", confirmLabel: "Thay" }))) return;
-              const { error } = await supabase.rpc("apply_sales_defaults");
-              if (error) setMsg({ kind: "error", text: error.message });
-              else {
-                await reload();
-                setMsg({ kind: "ok", text: "Đã dùng bộ email mẫu mới." });
-              }
-            }}
-          >
-            Dùng bộ mới
-          </button>
+          <div className="row">
+            <button
+              type="button"
+              onClick={async () => {
+                if (draft7) return setDraft7(null);
+                const [t, c] = await Promise.all([supabase.rpc("default_message_templates_v7"), supabase.rpc("default_cadence_v6")]);
+                if (t.error || c.error) setMsg({ kind: "error", text: (t.error ?? c.error)!.message });
+                else setDraft7({ templates: getTemplates({ message_templates: t.data }), cadence: getCadence({ cadence: c.data }) });
+              }}
+            >
+              {draft7 ? "Quay lại bộ đang dùng" : "Xem trước bộ mới"}
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={async () => {
+                if (!(await confirmDialog({ title: "Dùng bộ email mẫu mới (v7)?", message: "Toàn bộ email mẫu được thay; bộ đang dùng được sao lưu.", confirmLabel: "Dùng bộ mới" }))) return;
+                const { error } = await supabase.rpc("apply_sales_defaults");
+                if (error) setMsg({ kind: "error", text: error.message });
+                else {
+                  setDraft7(null);
+                  await reload();
+                  setMsg({ kind: "ok", text: "Đã dùng bộ email mẫu mới (v7)." });
+                }
+              }}
+            >
+              Dùng bộ mới (v7)
+            </button>
+          </div>
         </div>
       )}
       <div className="card filters-card">
@@ -321,7 +338,7 @@ export function EmailLibraryPage() {
                         </div>
                         <div className="row nowrap">
                           <CopyButton text={(t.subject ? `${show(t.subject, t)}\n\n` : "") + show(t.body, t)} />
-                          {isAdmin && (
+                          {canEdit && (
                             <>
                               <button type="button" className="btn-link small" onClick={() => startEdit(i)}>
                                 <Pencil aria-hidden="true" /> Sửa

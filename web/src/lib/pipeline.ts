@@ -348,7 +348,7 @@ export const SEGMENT_PRIORITY: Record<Segment, number> = { broadcaster: 40, mcn:
 
 const DEFAULT_CADENCE: CadenceStep[] = [
   { step: 1, day: 0, channel: "email", title: "Email mở lời" },
-  { step: 2, day: 3, channel: "email", title: "Email theo dõi 1: rủi ro bản quyền" },
+  { step: 2, day: 3, channel: "email", title: "Email theo dõi 1: nếu video bị claim thì sao" },
   { step: 3, day: 7, channel: "email", title: "Email theo dõi 2: thử nhạc miễn phí trên video của khách" },
 ];
 
@@ -571,10 +571,13 @@ export function addressFor(fullName: string | null, company: string): { ten: str
   return { ten, anh_chi, xung_ho: `${anh_chi} ${ten}` };
 }
 
+/** Dữ liệu app đã thu thập để viết câu riêng về khách: kênh YouTube, hoặc dấu hiệu trên website. */
 export interface YtFacts {
   channel: string | null;
   subscribers: number | null;
   videos90d: number | null;
+  /** Khi không có YouTube: mục dự án TVC / showreel trên website, hoặc tin tuyển dụng làm video. */
+  site?: "tvc" | "showreel" | "hiring" | null;
 }
 /** Câu riêng về khách cho email mở lời ({cau_rieng}); thiếu dữ liệu thì để chỗ trống đánh dấu để tự viết. */
 export function personalLine(company: string, yt: YtFacts | null): string {
@@ -585,25 +588,30 @@ export function personalLine(company: string, yt: YtFacts | null): string {
     const busy = (yt.videos90d ?? 0) >= 6 ? " — với nhịp đăng đều như vậy, chọn nhạc nền chắc chiếm không ít thời gian của đội sản xuất." : ".";
     return `Em có xem kênh YouTube ${yt.channel} của ${company}${facts ? ` (${facts})` : ""}${busy}`;
   }
+  if (yt?.site === "tvc") return `Em có xem phần dự án TVC trên website của ${company}.`;
+  if (yt?.site === "showreel") return `Em có xem showreel trên website của ${company}.`;
+  if (yt?.site === "hiring") return `Em thấy ${company} đang tuyển vị trí làm video, chắc thời gian tới lượng video sẽ còn tăng.`;
   return `[Một câu riêng về ${company}: dự án hoặc video gần đây anh/chị đã xem]`;
 }
 
-/** Dữ liệu kênh YouTube app đã thu thập cho công ty (dùng cho câu riêng về khách); null nếu chưa có. */
-export async function loadYtFacts(companyId: string): Promise<YtFacts | null> {
+/** Dữ liệu cho câu riêng về khách: kênh YouTube app đã thu thập, nếu không có thì dấu hiệu chắc chắn trên website. */
+export async function loadPersonalFacts(companyId: string): Promise<YtFacts | null> {
   const o = await supabase
     .from("observations")
-    .select("signal_code,value_num,value_text")
+    .select("signal_code,value_num,value_text,confidence")
     .eq("company_id", companyId)
-    .in("signal_code", ["YT_SUBSCRIBERS", "YT_UPLOAD_FREQ", "MULTI_CHANNEL_OWNER"])
+    .in("signal_code", ["YT_SUBSCRIBERS", "YT_UPLOAD_FREQ", "MULTI_CHANNEL_OWNER", "TVC_PORTFOLIO", "HAS_SHOWREEL", "HIRING_VIDEO_ROLE"])
     .order("observed_at", { ascending: false })
-    .limit(15);
-  const latest = (code: string) => (o.data ?? []).find((x) => x.signal_code === code) as
-    | { value_num: number | null; value_text: string | null }
-    | undefined;
+    .limit(30);
+  const rows = (o.data ?? []) as { signal_code: string; value_num: number | null; value_text: string | null; confidence: number | null }[];
+  const latest = (code: string, minConf = 0) => rows.find((x) => x.signal_code === code && (x.confidence ?? 1) >= minConf);
   const subs = latest("YT_SUBSCRIBERS");
   const multi = latest("MULTI_CHANNEL_OWNER")?.value_text?.split("\n")[0]?.replace(/\s*\(https?:[^)]*\)\s*$/, "") ?? null;
   const channel = subs?.value_text && subs.value_text !== "Kênh ẩn số subscriber" ? subs.value_text : multi;
-  return channel ? { channel, subscribers: subs?.value_num ?? null, videos90d: latest("YT_UPLOAD_FREQ")?.value_num ?? null } : null;
+  // Chỉ dùng dấu hiệu website khi chắc chắn (chữ “TVC” / “showreel” trên trang, tin tuyển dụng rõ ràng).
+  const site = latest("TVC_PORTFOLIO", 0.8) ? "tvc" : latest("HAS_SHOWREEL", 0.9) ? "showreel" : latest("HIRING_VIDEO_ROLE", 0.7) ? "hiring" : null;
+  if (!channel && !site) return null;
+  return { channel, subscribers: subs?.value_num ?? null, videos90d: latest("YT_UPLOAD_FREQ")?.value_num ?? null, site };
 }
 
 export function renderTemplate(text: string, vars: Record<string, string>): string {

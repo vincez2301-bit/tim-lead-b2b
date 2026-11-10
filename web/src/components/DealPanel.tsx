@@ -48,7 +48,7 @@ import {
   outreachSent,
   outreachSteps,
   personalLine,
-  loadYtFacts,
+  loadPersonalFacts,
   templateVars,
   type YtFacts,
   addDays,
@@ -156,7 +156,7 @@ export function DealPanel({
     setActs((a.data ?? []) as Activity[]);
     setContacts((c.data ?? []) as ContactRow[]);
     // Dữ liệu cho câu riêng về khách trong email mở lời (kênh YouTube app đã thu thập).
-    setYt(await loadYtFacts(row.company_id));
+    setYt(await loadPersonalFacts(row.company_id));
   }, [dealId]);
 
   // Người đúng vai trò có email lên đầu; email tuyển dụng / CSKH bị ẩn (không bao giờ là người nhận).

@@ -1,6 +1,6 @@
 # 004 — Email mẫu hấp dẫn hơn, đủ thông tin để khách hiểu Epidemic Sound
 
-- **Trạng thái:** Nháp <!-- Nháp → Đã duyệt (ngày) → Đã xong (commit) -->
+- **Trạng thái:** Đã xong (2026-11-10) <!-- Nháp → Đã duyệt (ngày) → Đã xong (commit) -->
 - **Người duyệt:** Việt
 
 ## Vấn đề / mục tiêu
@@ -65,14 +65,14 @@ Không có dữ liệu nào thì vẫn để chỗ trống đánh dấu như hi�
 
 ## Tiêu chí nghiệm thu
 - [x] Kho nội dung xem trước với khách thật trong pipeline (chọn được khách, đúng nhóm khách), không còn tên mẫu cố định; điền đủ câu riêng, tiêu đề “Re: …”, playlist, người nhận tốt nhất.
-- [ ] Bộ v7: 6 email × 5 nhóm khách theo bảng trên, cùng mẫu chặng chốt và nuôi dưỡng.
+- [x] Bộ v7: 6 email × 5 nhóm khách theo bảng trên, cùng mẫu chặng chốt và nuôi dưỡng.
   - Email mở lời dưới ~170 chữ, email theo dõi dưới ~110 chữ.
   - Mỗi email nêu đúng một thông tin mới và một việc cho khách.
-- [ ] Tiêu đề email mở lời có tên công ty và một lợi ích cụ thể; email theo dõi vẫn là “Re: …” cùng luồng.
-- [ ] Mọi thông tin về Epidemic Sound lấy từ hợp đồng mẫu và tài liệu bạn đã đưa; chỗ chưa chắc đánh dấu “cần kiểm tra” trong spec để bạn duyệt.
-- [ ] Câu riêng về khách dùng thêm showreel / dự án TVC / tin tuyển dụng làm video khi không có YouTube.
-- [ ] Bộ mới chỉ áp dụng khi bạn bấm “Dùng bộ mới (v7)”; bộ đang dùng được sao lưu; lịch và email bạn đang gửi dở không đổi.
-- [ ] Trên điện thoại vẫn dùng được.
+- [x] Tiêu đề email mở lời có tên công ty và một lợi ích cụ thể; email theo dõi vẫn là “Re: …” cùng luồng.
+- [x] Mọi thông tin về Epidemic Sound lấy từ hợp đồng mẫu và tài liệu bạn đã đưa; chỗ chưa chắc đánh dấu “cần kiểm tra” trong spec để bạn duyệt.
+- [x] Câu riêng về khách dùng thêm showreel / dự án TVC / tin tuyển dụng làm video khi không có YouTube.
+- [x] Bộ mới chỉ áp dụng khi bạn bấm “Dùng bộ mới (v7)”; bộ đang dùng được sao lưu; lịch và email bạn đang gửi dở không đổi.
+- [x] Trên điện thoại vẫn dùng được.
 
 ## Không làm (lần này)
 - Nêu giá cụ thể trong email (chỉ nói cách tính, mời báo giá ước tính).
@@ -80,11 +80,11 @@ Không có dữ liệu nào thì vẫn để chỗ trống đánh dấu như hi�
 - Tự gửi email, theo dõi mở thư.
 
 ## Ảnh hưởng & chi phí
-- **Dữ liệu:** không thêm bảng. Migration thêm `default_message_templates_v7()`; nút “Dùng bộ mới” thay `settings.message_templates`, sao lưu bản cũ vào `message_templates_backup_v6`. Lịch (cadence) giữ nguyên, chỉ đổi tên email ngày 18.
+- **Dữ liệu:** không thêm bảng. Migration `20261110000100_templates_v7.sql` thêm `default_message_templates_v7()` và `default_cadence_v6()`; nút “Dùng bộ mới (v7)” thay `settings.message_templates` + `settings.cadence`, sao lưu bản cũ vào `message_templates_backup_v6` / `cadence_backup_v5`. Lịch giữ nguyên ngày gửi; *đổi khi làm:* đổi tên cả email ngày 3 (“nếu video bị claim thì sao”) lẫn ngày 18 cho khớp bảng trên, và việc đang hẹn theo tên cũ được đổi theo. Có nút “Xem trước bộ mới” để đọc thử trước khi áp dụng.
 - **Hạn mức / tiền:** không tốn thêm.
 - **Triển khai:** đẩy `main` = chạy thật; bạn bấm “Dùng bộ mới (v7)” khi đã đọc thử.
 
-## Câu hỏi còn mở (mặc định đề xuất trong ngoặc)
+## Câu hỏi còn mở (đã chốt khi duyệt, theo mặc định đề xuất trong ngoặc)
 1. Email ngày 18 đổi sang “Chi phí tính thế nào” thay cho “đơn vị cùng ngành dùng thế nào”? (Có.)
 2. Thông tin **cần kiểm tra** trước khi gửi:
    - (a) “Không trả thêm phí cho tổ chức tác quyền” áp dụng ở Việt Nam. Hợp đồng mẫu có ngoại lệ khi luật địa phương bắt buộc thu qua tổ chức đó.
@@ -92,3 +92,7 @@ Không có dữ liệu nào thì vẫn để chỗ trống đánh dấu như hi�
 
    (Giữ như bộ v6; bạn sửa nếu sai.)
 3. Thêm P.S. “gửi link video để nhận 3 phương án nhạc miễn phí” ngay ở email mở lời? (Có — email ngày 7 vẫn nhắc lại, chi tiết hơn.)
+
+## Kế hoạch
+- **Tệp sửa:** migration `20261110000100_templates_v7.sql` (sinh từ script, mẫu chặng chốt lấy lại từ v6); `web/src/lib/pipeline.ts` (`templateVars`, `loadPersonalFacts`, câu riêng từ website); Kho nội dung (xem trước với khách thật, xem trước bộ mới, nút Dùng bộ mới v7); test `99_templates_v7_test.sql`; README.
+- **Kiểm tra:** `scripts/test-db.sh` (có test mới), `npm run build`.
