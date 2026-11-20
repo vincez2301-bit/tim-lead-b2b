@@ -9,6 +9,7 @@ Tổng quan, cấu trúc, triển khai: `README.md`. Frontend: `web/README.md`. 
 
 ## Lưu ý
 - Supabase deploy production từ `main`: push lên `main` = deploy thật.
+- Hook `.claude/hooks/kiem-tra-lenh.mjs` hỏi người dùng trước khi push lên `main`, dùng `--no-verify`, hoặc commit file .xlsx/.csv/.vcf, số điện thoại. Báo nhầm thì sửa hook, không lách.
 - Không tạo PR khi chưa được yêu cầu.
 - Không dùng Supabase MCP khi người dùng chưa xác nhận đúng project (các kết nối hiện có thuộc tài khoản cũ).
 - Cloud: supabase.com bị chặn mạng, tra tài liệu bằng WebSearch.
